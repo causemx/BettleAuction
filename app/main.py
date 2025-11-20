@@ -1,7 +1,6 @@
 from fastapi import FastAPI
-from database import Base, engine, init_db
+from database import init_db
 from routes import router
-import models
 
 init_db()
 
