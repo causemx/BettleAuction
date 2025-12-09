@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Home - FastAPI Auth{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+    <!-- Welcome Section -->
+    <div class="bg-white rounded-lg shadow-lg p-8 flex flex-col justify-center">
+        <h2 class="text-4xl font-bold text-gray-800 mb-4">Welcome!</h2>
+        <p class="text-gray-600 text-lg mb-6">
+            Secure authentication system built with FastAPI, PostgreSQL, and modern web technologies.
+        </p>
+        <div class="space-y-3">
+            <p class="text-gray-700">✅ <strong>JWT Authentication</strong> - Secure token-based auth</p>
+            <p class="text-gray-700">✅ <strong>Role-Based Access</strong> - User and Admin roles</p>
+            <p class="text-gray-700">✅ <strong>HTMX Integration</strong> - Dynamic interactions</p>
+            <p class="text-gray-700">✅ <strong>Password Hashing</strong> - bcrypt encryption</p>
+        </div>
+    </div>
+    
+    <!-- Action Buttons -->
+    <div class="space-y-4">
+        <!-- Login Card -->
+        <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-8 text-white">
+            <h3 class="text-2xl font-bold mb-4">Already have an account?</h3>
+            <p class="mb-6 text-blue-100">Sign in to your account to access your dashboard</p>
+            <a href="/login" class="inline-block bg-white text-blue-600 font-semibold py-2 px-6 rounded-lg hover:bg-blue-50 transition duration-200">
+                Login →
+            </a>
+        </div>
+        
+        <!-- Register Card -->
+        <div class="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-lg shadow-lg p-8 text-white">
+            <h3 class="text-2xl font-bold mb-4">New user?</h3>
+            <p class="mb-6 text-indigo-100">Create a new account and join us today</p>
+            <a href="/register" class="inline-block bg-white text-indigo-600 font-semibold py-2 px-6 rounded-lg hover:bg-indigo-50 transition duration-200">
+                Register →
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Features Section -->
+<div class="mt-16 grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="text-4xl mb-4">🔐</div>
+        <h3 class="text-xl font-bold text-gray-800 mb-2">Secure</h3>
+        <p class="text-gray-600">Password hashing with bcrypt and JWT token authentication</p>
+    </div>
+    
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="text-4xl mb-4">⚡</div>
+        <h3 class="text-xl font-bold text-gray-800 mb-2">Fast</h3>
+        <p class="text-gray-600">HTMX for dynamic interactions without full page reloads</p>
+    </div>
+    
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="text-4xl mb-4">📊</div>
+        <h3 class="text-xl font-bold text-gray-800 mb-2">Scalable</h3>
+        <p class="text-gray-600">PostgreSQL database with role-based access control</p>
+    </div>
+</div>
+{% endblock %}

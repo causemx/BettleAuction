@@ -25,8 +25,6 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
-    except Exception:
-        print("Error on db retrieve")
     finally:
         db.close()
         

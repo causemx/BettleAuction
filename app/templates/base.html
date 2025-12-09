@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}FastAPI Auth{% endblock %}</title>
+    
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Alpine JS (optional, for interactivity) -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .htmx-request.htmx-settling .htmx-swapping {
+            opacity: 0;
+            transition: opacity 200ms ease-out;
+        }
+        .htmx-request.htmx-settling .htmx-added {
+            opacity: 0;
+            transition: opacity 200ms ease-out;
+        }
+        .htmx-settling .htmx-swapping {
+            opacity: 1;
+            transition: opacity 200ms ease-in;
+        }
+        .htmx-settling .htmx-added {
+            opacity: 1;
+            transition: opacity 200ms ease-in;
+        }
+    </style>
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <h1 class="text-2xl font-bold text-indigo-600">🔐 FastAPI Auth</h1>
+                </div>
+                <div id="navbar-info" hx-get="/api/user-info" hx-trigger="load">
+                    <div class="animate-pulse h-8 w-20 bg-gray-300 rounded"></div>
+                </div>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {% block content %}{% endblock %}
+    </main>
+    
+    <!-- Footer -->
+    <footer class="mt-12 py-6 bg-white border-t">
+        <div class="max-w-7xl mx-auto px-4 text-center text-gray-600">
+            <p>&copy; 2024 FastAPI Authentication with HTMX/Jinja2</p>
+        </div>
+    </footer>
+    
+    <script>
+        // HTMX configuration
+        document.body.addEventListener('htmx:configRequest', function(detail) {
+            const token = getCookie('access_token');
+            if (token) {
+                detail.xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+            }
+        });
+        
+        function getCookie(name) {
+            const nameEQ = name + "=";
+            const ca = document.cookie.split(';');
+            for(let i = 0; i < ca.length; i++) {
+                let c = ca[i].trim();
+                if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length);
+            }
+            return null;
+        }
+    </script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
