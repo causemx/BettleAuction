@@ -1,20 +1,12 @@
+import crud
+import os
 from fastapi import APIRouter, Request, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from datetime import timedelta
-import os
-
+from auth import create_access_token
 from database import get_db
-from models import UserModel, Role
-from schemas import UserCreate, UserLogin, UserResponse, Token
-from auth import (
-    hash_password,
-    authenticate_user,
-    create_access_token,
-    get_current_user,
-    verify_token,
-)
 
 # Setup templates from app/templates
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -105,31 +97,17 @@ async def register_user(
                 status_code=400
             )
 
-        # Check if user exists
-        exist_user = db.query(UserModel).filter(
-            (UserModel.username == username) | (UserModel.email == email)
-        ).first()
-        
-        if exist_user:
-            error_msg = "Username already taken" if exist_user.username == username else "Email already registered"
+        try:
+            crud.create_user(db, username, email, password)
+        except ValueError as e:
             return templates.TemplateResponse(
                 "register.html",
                 {
                     "request": request,
-                    "error": error_msg,
+                    "error": str(e),
                 },
                 status_code=400
             )
-        
-        # Create user
-        db_user = UserModel(
-            username=username,
-            email=email,
-            hashed_password=hash_password(password),
-            role=Role.USER
-        )
-        db.add(db_user)
-        db.commit()
         
         # Redirect to login with success message
         response = RedirectResponse(
@@ -157,10 +135,36 @@ async def login_user(
     password: str,
     db: Session = Depends(get_db)
 ):
-    """Login via form - returns HTML with token in cookie"""
+    """
+    Login via form - returns HTML with token in cookie
+    
+    Uses CRUD operations for:
+    - User authentication
+    """
     try:
-        # Authenticate user
-        db_user = authenticate_user(username, password, db)
+        # Validate input
+        if not username:
+            return templates.TemplateResponse(
+                "login.html",
+                {
+                    "request": request,
+                    "error": "Username is required",
+                },
+                status_code=400
+            )
+
+        if not password:
+            return templates.TemplateResponse(
+                "login.html",
+                {
+                    "request": request,
+                    "error": "Password is required",
+                },
+                status_code=400
+            )
+
+        # Authenticate user using CRUD operation
+        db_user = crud.authenticate_user(db, username, password)
         
         if not db_user:
             return templates.TemplateResponse(
@@ -219,7 +223,6 @@ async def login_user(
             status_code=500
         )
 
-
 @router_web.get("/logout")
 async def logout():
     """Logout - clear cookies and redirect"""
@@ -261,7 +264,7 @@ async def profile_info(request: Request, db: Session = Depends(get_db)):
     
     try:
         # Get user from database
-        user = db.query(UserModel).filter(UserModel.username == username).first()
+        user = crud.get_user(db, username=username)
         
         if not user:
             return HTMLResponse(status_code=404)
@@ -294,7 +297,7 @@ async def check_username_available(username: str, db: Session = Depends(get_db))
             status_code=400
         )
     
-    existing = db.query(UserModel).filter(UserModel.username == username).first()
+    existing = crud.get_user(db, username=username)
     
     return JSONResponse({
         "available": existing is None,
@@ -311,7 +314,7 @@ async def check_email_available(email: str, db: Session = Depends(get_db)):
             status_code=400
         )
     
-    existing = db.query(UserModel).filter(UserModel.email == email).first()
+    existing = crud.get_user(db, email=email)
     
     return JSONResponse({
         "available": existing is None,

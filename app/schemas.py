@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from datetime import datetime
 from typing import Optional
 from models import Role
@@ -31,9 +31,20 @@ class UserResponse(BaseModel):
     email: EmailStr
     role: str
     create_at: datetime
-   
-    class config:
-        from_attributes = True
+    
+    # pydantic V2 formation
+    model_config = {
+        'from_attributes': True
+    }
+
+    @field_validator('role')
+    @classmethod
+    def serialize_role(cls, v):
+        """Convert Role enum to string"""
+        if isinstance(v, Role):
+            return v.value  # Returns 'user' or 'admin'
+        return v
+    
         
 class UserLogin(BaseModel):
     username: str

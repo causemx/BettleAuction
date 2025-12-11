@@ -43,7 +43,6 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
 
 @router_auth.post("/login", response_model=Token)
 def login(user: UserLogin, db: Session = Depends(get_db)):
-    breakpoint()
     "Login and get JWT token"
     db_user = authenticate_user(user.username, user.password, db)
     if not db_user:
