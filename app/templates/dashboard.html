@@ -130,13 +130,12 @@
     // ========================================================================
     
     window.addEventListener('DOMContentLoaded', () => {
-        // Check if token exists
-        const token = localStorage.getItem('access_token');
-        const username = localStorage.getItem('username');
+        // Get username from cookie (backend sets this during login)
+        const username = getCookie('username');
         
-        if (!token) {
+        if (!username) {
             // Not authenticated, redirect to login
-            showError('No authentication token found. Please login first.');
+            showError('No authentication found. Please login first.');
             setTimeout(() => {
                 window.location.href = '/login';
             }, 2000);
@@ -144,30 +143,44 @@
         }
         
         // Display username
-        document.getElementById('username-display').textContent = username || 'User';
-        document.getElementById('profile-username').textContent = username || 'Unknown';
+        document.getElementById('username-display').textContent = username;
+        document.getElementById('profile-username').textContent = username;
         
         // Fetch user profile info
-        fetchUserProfile(token);
+        fetchUserProfile();
     });
+
+    // ========================================================================
+    // HELPER: GET COOKIE VALUE
+    // ========================================================================
+    
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) {
+            return parts.pop().split(';').shift();
+        }
+        return null;
+    }
 
     // ========================================================================
     // FETCH USER PROFILE
     // ========================================================================
     
-    async function fetchUserProfile(token) {
+    async function fetchUserProfile() {
         try {
-            const response = await fetch('/auth/profile', {
+            // Call the /api/profile endpoint (no token needed - backend reads from cookie)
+            const response = await fetch('/api/profile', {
                 method: 'GET',
                 headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                }
+                    'Content-Type': 'text/html',
+                },
+                credentials: 'same-origin'  // Include cookies
             });
             
             if (!response.ok) {
                 if (response.status === 401) {
-                    // Token expired or invalid
+                    // Not authenticated
                     showError('Your session has expired. Please login again.');
                     setTimeout(() => {
                         logout();
@@ -177,16 +190,41 @@
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             
-            const user = await response.json();
+            // Response is HTML, parse it
+            const html = await response.text();
             
-            // Update profile info
-            document.getElementById('profile-email').textContent = user.email || 'N/A';
-            document.getElementById('role-badge').textContent = (user.role || 'user').toUpperCase();
+            // Extract data from HTML response
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+            
+            // Get profile info from the HTML
+            const usernameElem = tempDiv.querySelector('p') ? tempDiv.textContent : '';
+            
+            // Parse the HTML to get user info
+            const text = html;
+            const usernameMatch = text.match(/Username:<\/strong>\s*(\w+)/);
+            const emailMatch = text.match(/Email:<\/strong>\s*([^<]+)/);
+            const roleMatch = text.match(/Role:<\/[^>]+>[^<]*<span[^>]*>([^<]+)/);
+            
+            if (emailMatch) {
+                document.getElementById('profile-email').textContent = emailMatch[1].trim() || 'N/A';
+            }
+            
+            if (roleMatch) {
+                const role = roleMatch[1].trim().toLowerCase();
+                document.getElementById('role-badge').textContent = role;
+                // Update badge color based on role
+                const badge = document.getElementById('role-badge');
+                if (role === 'admin') {
+                    badge.classList.remove('bg-indigo-100', 'text-indigo-800');
+                    badge.classList.add('bg-red-100', 'text-red-800');
+                }
+            }
             
             showSuccess('Profile loaded successfully!');
         } catch (error) {
             console.error('Error fetching profile:', error);
-            // Continue anyway - user is logged in
+            showError('Could not load profile: ' + error.message);
         }
     }
 
@@ -195,39 +233,31 @@
     // ========================================================================
     
     async function testApiCall() {
-        const token = localStorage.getItem('access_token');
-        
-        if (!token) {
-            showError('No token found');
-            return;
-        }
-        
         try {
-            const response = await fetch('/auth/users', {
+            const response = await fetch('/api/profile', {
                 method: 'GET',
                 headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                }
+                    'Content-Type': 'text/html',
+                },
+                credentials: 'same-origin'
             });
             
-            const data = await response.json();
+            const data = await response.text();
             
             const resultDiv = document.getElementById('api-result');
             const outputDiv = document.getElementById('api-output');
             
             if (response.ok) {
-                outputDiv.textContent = JSON.stringify(data, null, 2);
+                outputDiv.textContent = data;
                 resultDiv.classList.remove('hidden');
                 resultDiv.classList.remove('bg-red-50');
                 resultDiv.classList.add('bg-green-50');
+                showSuccess('API call successful!');
             } else {
-                outputDiv.textContent = JSON.stringify({
-                    status: response.status,
-                    error: data.detail || 'API Error'
-                }, null, 2);
+                outputDiv.textContent = `Error: ${response.status} ${response.statusText}`;
                 resultDiv.classList.remove('hidden');
                 resultDiv.classList.add('bg-red-50');
+                showError('API call failed with status ' + response.status);
             }
         } catch (error) {
             console.error('API test error:', error);
@@ -240,37 +270,19 @@
     // ========================================================================
     
     function showTokenInfo() {
-        const token = localStorage.getItem('access_token');
+        const tokenInfoDiv = document.getElementById('token-info');
+        const payloadDiv = document.getElementById('token-payload');
         
-        if (!token) {
-            showError('No token found');
-            return;
-        }
+        // Token is in HTTP-only cookie, we can't access it from JavaScript
+        payloadDiv.textContent = JSON.stringify({
+            note: "Token is stored in HTTP-only cookie and cannot be accessed from JavaScript",
+            storage: "HTTP-only cookie (secure)",
+            accessible: false,
+            info: "This is more secure - prevents XSS attacks from stealing your token"
+        }, null, 2);
         
-        try {
-            // Decode JWT token (without verification - just for display)
-            const parts = token.split('.');
-            if (parts.length !== 3) {
-                showError('Invalid token format');
-                return;
-            }
-            
-            // Decode payload
-            const payload = JSON.parse(
-                atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'))
-            );
-            
-            const tokenInfoDiv = document.getElementById('token-info');
-            const payloadDiv = document.getElementById('token-payload');
-            
-            payloadDiv.textContent = JSON.stringify(payload, null, 2);
-            tokenInfoDiv.classList.remove('hidden');
-            
-            showSuccess('Token info displayed!');
-        } catch (error) {
-            console.error('Error decoding token:', error);
-            showError('Failed to decode token: ' + error.message);
-        }
+        tokenInfoDiv.classList.remove('hidden');
+        showSuccess('Token is stored securely in HTTP-only cookie!');
     }
 
     // ========================================================================
@@ -278,12 +290,20 @@
     // ========================================================================
     
     function logout() {
-        // Clear localStorage
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('username');
-        
-        // Redirect to login
-        window.location.href = '/login?success=You have been logged out successfully.';
+        try {
+            // Call logout endpoint to clear cookies on server
+            fetch('/logout', {
+                method: 'GET',
+                credentials: 'same-origin'
+            }).then(() => {
+                // Redirect to login
+                window.location.href = '/login?success=You have been logged out successfully.';
+            });
+        } catch (error) {
+            console.error('Logout error:', error);
+            // Still redirect even if fetch fails
+            window.location.href = '/login';
+        }
     }
 
     // ========================================================================

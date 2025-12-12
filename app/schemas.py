@@ -60,4 +60,11 @@ class TokenData(BaseModel):
     role: Optional[str] = None
     user_id: Optional[int] = None 
     
+class RegisterRequest(BaseModel):
+    username: str
+    email: str
+    password: str
 
+class LoginRequest(BaseModel):
+    username: str
+    password: str

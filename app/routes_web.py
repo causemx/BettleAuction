@@ -6,6 +6,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from datetime import timedelta
 from auth import create_access_token
+from schemas import RegisterRequest, LoginRequest
 from database import get_db
 
 # Setup templates from app/templates
@@ -56,110 +57,81 @@ async def dashboard(request: Request):
 # API ROUTES (Web Form Submission - Returns HTML)
 # ============================================================================
 
-@router_web.post("/api/register", response_class=HTMLResponse)
+@router_web.post("/api/register")
 async def register_user(
-    request: Request,
-    username: str,
-    email: str,
-    password: str,
+    data: RegisterRequest,
     db: Session = Depends(get_db)
 ):
-    """Register new user via form - HTML response"""
+    """Register new user via JSON POST"""
     try:
+        username = data.username.strip()
+        email = data.email.strip()
+        password = data.password
+        
         # Validate input
         if not username or len(username) < 3 or len(username) > 100:
-            return templates.TemplateResponse(
-                "register.html",
-                {
-                    "request": request,
-                    "error": "Username must be 3-100 characters",
-                },
+            return JSONResponse(
+                {"detail": "Username must be 3-100 characters"},
                 status_code=400
             )
         
         if not email or "@" not in email:
-            return templates.TemplateResponse(
-                "register.html",
-                {
-                    "request": request,
-                    "error": "Invalid email address",
-                },
+            return JSONResponse(
+                {"detail": "Invalid email address"},
                 status_code=400
             )
         
         if not password or len(password) < 6:
-            return templates.TemplateResponse(
-                "register.html",
-                {
-                    "request": request,
-                    "error": "Password must be at least 6 characters",
-                },
+            return JSONResponse(
+                {"detail": "Password must be at least 6 characters"},
                 status_code=400
             )
 
         try:
             crud.create_user(db, username, email, password)
         except ValueError as e:
-            return templates.TemplateResponse(
-                "register.html",
-                {
-                    "request": request,
-                    "error": str(e),
-                },
+            return JSONResponse(
+                {"detail": str(e)},
                 status_code=400
             )
         
-        # Redirect to login with success message
-        response = RedirectResponse(
-            url="/login?success=Account created successfully. Please login.",
-            status_code=303
+        return JSONResponse(
+            {"message": "User registered successfully"},
+            status_code=201
         )
-        return response
 
     except Exception as e:
         print(f"Registration error: {str(e)}")
-        return templates.TemplateResponse(
-            "register.html",
-            {
-                "request": request,
-                "error": "An error occurred during registration. Please try again.",
-            },
+        return JSONResponse(
+            {"detail": "An error occurred during registration. Please try again."},
             status_code=500
         )
 
 
-@router_web.post("/api/login", response_class=HTMLResponse)
+@router_web.post("/api/login")
 async def login_user(
-    request: Request,
-    username: str,
-    password: str,
+    data: LoginRequest,
     db: Session = Depends(get_db)
 ):
     """
-    Login via form - returns HTML with token in cookie
+    Login via JSON POST - returns JSON with redirect URL
     
-    Uses CRUD operations for:
-    - User authentication
+    Uses CRUD operations for user authentication
     """
     try:
+        username = data.username.strip()
+        password = data.password
+        
         # Validate input
         if not username:
-            return templates.TemplateResponse(
-                "login.html",
-                {
-                    "request": request,
-                    "error": "Username is required",
-                },
+            return JSONResponse(
+                {"detail": "Username is required"},
                 status_code=400
             )
 
         if not password:
-            return templates.TemplateResponse(
-                "login.html",
-                {
-                    "request": request,
-                    "error": "Password is required",
-                },
+            return JSONResponse(
+                {"detail": "Password is required"},
                 status_code=400
             )
 
@@ -167,12 +139,8 @@ async def login_user(
         db_user = crud.authenticate_user(db, username, password)
         
         if not db_user:
-            return templates.TemplateResponse(
-                "login.html",
-                {
-                    "request": request,
-                    "error": "Invalid username or password",
-                },
+            return JSONResponse(
+                {"detail": "Invalid username or password"},
                 status_code=401
             )
         
@@ -187,13 +155,14 @@ async def login_user(
             expires_delta=access_token_expires
         )
         
-        # Render dashboard
-        response_html = templates.get_template("dashboard.html").render(
-            request=request,
-            username=db_user.username
+        # Create response with redirect URL
+        response = JSONResponse(
+            {
+                "message": "Login successful",
+                "redirect": "/dashboard"
+            },
+            status_code=200
         )
-        
-        response = HTMLResponse(content=response_html)
         
         # Set secure cookies
         response.set_cookie(
@@ -214,12 +183,8 @@ async def login_user(
 
     except Exception as e:
         print(f"Login error: {str(e)}")
-        return templates.TemplateResponse(
-            "login.html",
-            {
-                "request": request,
-                "error": "An error occurred during login. Please try again.",
-            },
+        return JSONResponse(
+            {"detail": "An error occurred during login. Please try again."},
             status_code=500
         )
 
@@ -230,7 +195,6 @@ async def logout():
     response.delete_cookie("access_token")
     response.delete_cookie("username")
     return response
-
 
 # ============================================================================
 # HTMX ENDPOINTS (Dynamic Content)
@@ -264,7 +228,7 @@ async def profile_info(request: Request, db: Session = Depends(get_db)):
     
     try:
         # Get user from database
-        user = crud.get_user(db, username=username)
+        user = crud.get_user_by_name(db, username=username)
         
         if not user:
             return HTMLResponse(status_code=404)
@@ -297,7 +261,7 @@ async def check_username_available(username: str, db: Session = Depends(get_db))
             status_code=400
         )
     
-    existing = crud.get_user(db, username=username)
+    existing = crud.get_user_by_name(db, username=username)
     
     return JSONResponse({
         "available": existing is None,
@@ -314,7 +278,7 @@ async def check_email_available(email: str, db: Session = Depends(get_db)):
             status_code=400
         )
     
-    existing = crud.get_user(db, email=email)
+    existing = crud.get_user_by_email(db, email=email)
     
     return JSONResponse({
         "available": existing is None,

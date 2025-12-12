@@ -28,5 +28,3 @@ class Auction(Base):
     author = Column(String(100), nullable=True)
     create_at = Column(DateTime, default=datetime.utcnow)
     update_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-

@@ -197,7 +197,7 @@
     });
 
     // ========================================================================
-    // FORM SUBMISSION - SEND JSON TO /auth/login
+    // FORM SUBMISSION - SEND JSON TO /api/login
     // ========================================================================
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -217,53 +217,63 @@
             return;
         }
 
-        if (password.length < 1) {
-            showError('Password is required');
-            return;
-        }
-
         // Disable button and show spinner
         loginBtn.disabled = true;
         btnText.classList.add('hidden');
         btnSpinner.classList.remove('hidden');
 
         try {
-            // Send JSON to /auth/login endpoint
-            const response = await fetch('/auth/login', {
+            // Send JSON to /api/login endpoint
+            const response = await fetch('/api/login', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',
                 },
                 body: JSON.stringify({
                     username: username,
                     password: password
                 }),
+                credentials: 'same-origin'
             });
+
+            // Check if response is ok before parsing
+            if (!response.ok) {
+                let errorDetail = 'Login failed. Please try again.';
+                try {
+                    const errorData = await response.json();
+                    errorDetail = errorData.detail || errorDetail;
+                } catch (parseError) {
+                    console.error('Error parsing error response:', parseError);
+                    // If we can't parse JSON, show the status text
+                    errorDetail = `Server error: ${response.status} ${response.statusText}`;
+                }
+                showError(errorDetail);
+                return;
+            }
 
             const data = await response.json();
 
-            if (response.ok) {
-                // Success - get JWT token
-                const accessToken = data.access_token;
-                const username_value = data.user.username;
-                
-                // Store token in localStorage or sessionStorage
-                localStorage.setItem('access_token', accessToken);
-                localStorage.setItem('username', username_value);
-                
-                // Show success and redirect
-                showSuccess('Login successful! Redirecting to dashboard...');
-                setTimeout(() => {
-                    window.location.href = '/dashboard';
-                }, 1500);
-            } else {
-                // Handle error response
-                const errorDetail = data.detail || 'Login failed. Please try again.';
-                showError(errorDetail);
-            }
+            // Success - backend sets cookies automatically
+            // Just show success message and redirect
+            showSuccess('Login successful! Redirecting to dashboard...');
+            setTimeout(() => {
+                window.location.href = data.redirect || '/dashboard';
+            }, 1000);
+
         } catch (error) {
             console.error('Login error:', error);
-            showError('An error occurred. Please try again later.');
+            
+            // More specific error messages
+            if (error instanceof TypeError) {
+                if (error.message.includes('fetch') || error.message.includes('NetworkError')) {
+                    showError('Network error: Unable to connect to server. Please check if the server is running on http://127.0.0.1:8000');
+                } else {
+                    showError('Connection error: ' + error.message);
+                }
+            } else {
+                showError('An unexpected error occurred. Please try again later.');
+            }
         } finally {
             // Re-enable button and hide spinner
             loginBtn.disabled = false;
@@ -302,7 +312,7 @@
     // ENTER KEY HANDLING
     // ========================================================================
     document.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter' && e.target === passwordInput) {
+        if (e.key === 'Enter' && (e.target === document.getElementById('username') || e.target === passwordInput)) {
             loginForm.dispatchEvent(new Event('submit'));
         }
     });
@@ -316,7 +326,7 @@
         }
     });
 
-    document.getElementById('password').addEventListener('focus', () => {
+    passwordInput.addEventListener('focus', () => {
         if (errorMsg.innerHTML) {
             errorMsg.innerHTML = '';
         }
