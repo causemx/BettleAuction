@@ -11,21 +11,21 @@ router = APIRouter(prefix="/posts", tags=["posts"])
 @router.get("", response_model=List[AuctionResponse])
 def get_all_posts(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
     """Get all blog posts with pagination"""
-    posts = crud.get_all(db, skip, limit)
+    posts = crud.get_all_auctions(db, skip, limit)
     return posts
 
 @router.post("", response_model=AuctionResponse)
 def create_auction(auction: AuctionCreate, db: Session = Depends(get_db)):
-    return crud.create(db, auction)
+    return crud.create_auction(db, auction)
 
 @router.get("/{auction_id}", response_model=AuctionResponse)
 def get_auction(auction_id: int, db: Session=Depends(get_db)):
-    return crud.get_by_id(db, auction_id)
+    return crud.get_auction_by_id(db, auction_id)
 
 @router.put("/{auction_id}", response_model=AuctionResponse)
 def update_auction(auction_id: int, auction: AuctionUpdate, db: Session=Depends(get_db)):
-    return crud.update(db, auction_id)
+    return crud.update_auction(db, auction_id, auction)
 
 @router.delete("/{auction_id}", response_model=AuctionResponse)
 def delete_auction(auction_id: int, db: Session=Depends(get_db)):
-    return crud.delete(db, auction_id)
+    return crud.delete_auction(db, auction_id)
