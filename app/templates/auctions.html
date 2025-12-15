@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+
+{% block title %}Auctions - FastAPI{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gradient-to-br from-slate-50 via-slate-50 to-slate-100">
+    <!-- Header Section -->
+    <div class="border-b border-slate-200 bg-white/80 backdrop-blur-sm sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-3xl font-serif text-slate-900">Auctions</h1>
+                    <p class="text-sm text-slate-500 mt-1">Manage your auctions effortlessly</p>
+                </div>
+                <button
+                    onclick="openCreateModal()"
+                    class="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition font-medium"
+                >
+                    + New Auction
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Create/Edit Modal -->
+        <div id="auction-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center">
+                    <h2 id="modal-title" class="text-2xl font-serif text-slate-900">Create New Auction</h2>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div id="modal-content" class="p-6">
+                    <!-- Form will be loaded here via HTMX -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Auctions List -->
+        <div class="grid grid-cols-1 gap-6">
+            <!-- Loading State -->
+            <div id="auctions-container" class="space-y-4">
+                <div class="animate-pulse space-y-4">
+                    {% for i in range(3) %}
+                    <div class="bg-white rounded-lg h-24 shadow-sm"></div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Scripts - FIXED VERSION -->
+<script>
+    let isSubmitting = false;
+    
+    // ========================================================================
+    // PAGE INITIALIZATION
+    // ========================================================================
+    
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('[INIT] Page loaded, loading auctions');
+        loadAuctions();
+    });
+
+    // ========================================================================
+    // LOAD AUCTIONS LIST
+    // ========================================================================
+    
+    function loadAuctions() {
+        console.log('[LOAD_AUCTIONS] Fetching auction list');
+        htmx.ajax('GET', '/api/auctions/list', {
+            target: '#auctions-container',
+            swap: 'innerHTML'
+        });
+    }
+
+    // ========================================================================
+    // MODAL MANAGEMENT
+    // ========================================================================
+    
+    function openCreateModal() {
+        console.log('[OPEN_CREATE] Opening create modal');
+        document.getElementById('modal-title').textContent = 'Create New Auction';
+        document.getElementById('auction-modal').classList.remove('hidden');
+        document.getElementById('modal-content').innerHTML = '<div class="text-center py-8"><p class="text-slate-600">Loading form...</p></div>';
+        
+        // ✅ FIXED: Use correct endpoint
+        htmx.ajax('GET', '/api/auctions/create-form', {
+            target: '#modal-content',
+            swap: 'innerHTML'
+        });
+    }
+
+    function openEditModal(auctionId) {
+        console.log('[OPEN_EDIT] Opening edit modal for auction', auctionId);
+        document.getElementById('modal-title').textContent = 'Edit Auction';
+        document.getElementById('auction-modal').classList.remove('hidden');
+        document.getElementById('modal-content').innerHTML = '<div class="text-center py-8"><p class="text-slate-600">Loading form...</p></div>';
+        
+        htmx.ajax('GET', `/api/auctions/${auctionId}/edit`, {
+            target: '#modal-content',
+            swap: 'innerHTML'
+        });
+    }
+
+    function closeModal() {
+        console.log('[CLOSE_MODAL] Closing modal');
+        document.getElementById('auction-modal').classList.add('hidden');
+        document.getElementById('modal-content').innerHTML = '';
+        isSubmitting = false;
+    }
+
+    // ========================================================================
+    // KEYBOARD SHORTCUTS
+    // ========================================================================
+    
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !isSubmitting) {
+            console.log('[KEYBOARD] Escape pressed, closing modal');
+            closeModal();
+        }
+    });
+
+    // ========================================================================
+    // HTMX EVENT HANDLERS - FIXED
+    // ========================================================================
+    
+    // Before request - mark that we're submitting
+    document.body.addEventListener('htmx:beforeRequest', (event) => {
+        const path = event.detail.path || '';
+        const isFormSubmit = path.includes('/api/auctions/create') || 
+                           (path.includes('/api/auctions/') && event.detail.verb === 'PUT') ||
+                           (path.includes('/api/auctions/') && event.detail.verb === 'DELETE');
+        
+        if (isFormSubmit) {
+            console.log('[HTMX:BEFORE] Form submission starting:', {
+                method: event.detail.verb,
+                path: path
+            });
+            isSubmitting = true;
+        }
+    });
+    
+    // After swap - handle the response
+    document.body.addEventListener('htmx:afterSwap', (event) => {
+        const status = event.detail.xhr.status;
+        const target = event.detail.target?.id || '';
+        const path = event.detail.path || '';
+        
+        console.log('[HTMX:AFTER] After swap:', {
+            status,
+            target,
+            path,
+            responseLength: event.detail.xhr.responseText.length
+        });
+        
+        // Handle form submission response
+        if (target === 'modal-content' && status === 200) {
+            const responseHtml = event.detail.xhr.responseText;
+            
+            // ✅ FIXED: Check if response is a success (auction item) or error (form with error message)
+            // Success response will have the auction item HTML with class "group bg-white rounded-lg border"
+            // Error response will have the form HTML with error div
+            
+            const isAuctionItem = responseHtml.includes('id="auction-');
+            const isFormWithError = responseHtml.includes('class="p-4 bg-red-50 border border-red-200');
+            const isJustForm = responseHtml.includes('<form') && !isAuctionItem && !isFormWithError;
+            
+            console.log('[HTMX:AFTER] Response analysis:', {
+                isAuctionItem,
+                isFormWithError,
+                isJustForm
+            });
+            
+            // If we got an auction item back (success), close modal
+            if (isAuctionItem) {
+                console.log('[HTMX:AFTER] ✓ SUCCESS - Auction created! Closing modal');
+                
+                setTimeout(() => {
+                    console.log('[HTMX:AFTER] Reloading auction list');
+                    closeModal();
+                    loadAuctions();
+                }, 800);  // Wait 800ms before closing
+            }
+            // If we got a form back (error or form loading), keep modal open
+            else if (isFormWithError || isJustForm) {
+                console.log('[HTMX:AFTER] Form returned - keeping modal open');
+                isSubmitting = false;
+            }
+        }
+        
+        // Handle delete response (should be empty 200)
+        if (path.includes('DELETE') && status === 200) {
+            console.log('[HTMX:AFTER] ✓ Auction deleted, reloading list');
+            loadAuctions();
+        }
+    });
+    
+    // Handle errors
+    document.body.addEventListener('htmx:responseError', (event) => {
+        const status = event.detail.xhr.status;
+        const path = event.detail.path || '';
+        
+        console.error('[HTMX:ERROR] Response error:', { status, path });
+        isSubmitting = false;
+        
+        if (status === 401) {
+            console.log('[HTMX:ERROR] Unauthorized - redirecting to login');
+            window.location.href = '/login';
+        } else if (status >= 500) {
+            console.error('[HTMX:ERROR] Server error:', event.detail.xhr.responseText);
+            alert('Server error: ' + status);
+        }
+    });
+    
+    // Log all HTMX requests for debugging
+    document.body.addEventListener('htmx:beforeRequest', (event) => {
+        console.log('[HTMX:REQ]', event.detail.verb, event.detail.path);
+    });
+</script>
+
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&display=swap');
+    
+    h1, h2, .font-serif {
+        font-family: 'Merriweather', serif;
+    }
+</style>
+{% endblock %}

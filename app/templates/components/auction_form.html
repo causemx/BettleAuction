@@ -1,0 +1,111 @@
+<!-- Auction Create/Edit Form Component -->
+<form
+    hx-post="{% if mode == 'edit' %}/api/auctions/{{ auction_id }}{% else %}/api/auctions/create{% endif %}"
+    hx-target="#modal-content"
+    hx-swap="outerHTML"
+    class="space-y-5"
+    onsubmit="return validateForm(event)"
+>
+    {% if mode == 'edit' %}
+    <!-- Method Override for PUT (HTMX) -->
+    <input type="hidden" name="_method" value="PUT">
+    {% endif %}
+
+    <!-- Error Message -->
+    {% if error %}
+    <div class="p-4 bg-red-50 border border-red-200 rounded-lg">
+        <p class="text-sm text-red-700 font-medium">{{ error }}</p>
+    </div>
+    {% endif %}
+
+    <!-- Title Field -->
+    <div>
+        <label for="title" class="block text-sm font-medium text-slate-900 mb-2">
+            Auction Title
+        </label>
+        <input
+            type="text"
+            id="title"
+            name="title"
+            required
+            maxlength="255"
+            value="{% if auction %}{{ auction.title }}{% endif %}"
+            placeholder="Enter auction title"
+            class="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition bg-slate-50 placeholder-slate-400"
+        />
+        <p class="text-xs text-slate-500 mt-1">Max 255 characters</p>
+    </div>
+
+    <!-- Content Field -->
+    <div>
+        <label for="content" class="block text-sm font-medium text-slate-900 mb-2">
+            Description
+        </label>
+        <textarea
+            id="content"
+            name="content"
+            required
+            rows="5"
+            placeholder="Enter detailed description of the auction item..."
+            class="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition bg-slate-50 placeholder-slate-400 resize-none"
+        >{% if auction %}{{ auction.content }}{% endif %}</textarea>
+        <p class="text-xs text-slate-500 mt-1">Provide a detailed description</p>
+    </div>
+
+    <!-- Form Actions -->
+    <div class="flex gap-3 pt-4">
+        <button
+            type="submit"
+            class="flex-1 px-4 py-2.5 bg-slate-900 text-white font-medium rounded-lg hover:bg-slate-800 transition active:scale-95"
+        >
+            {% if mode == 'edit' %}
+            Update Auction
+            {% else %}
+            Create Auction
+            {% endif %}
+        </button>
+        <button
+            type="button"
+            onclick="closeModal()"
+            class="flex-1 px-4 py-2.5 border border-slate-300 text-slate-900 font-medium rounded-lg hover:bg-slate-50 transition"
+        >
+            Cancel
+        </button>
+    </div>
+</form>
+
+<script>
+    function validateForm(event) {
+        const title = document.getElementById('title').value.trim();
+        const content = document.getElementById('content').value.trim();
+
+        if (!title) {
+            event.preventDefault();
+            alert('Please enter a title');
+            return false;
+        }
+
+        if (!content) {
+            event.preventDefault();
+            alert('Please enter a description');
+            return false;
+        }
+
+        if (title.length > 255) {
+            event.preventDefault();
+            alert('Title must be 255 characters or less');
+            return false;
+        }
+
+        return true;
+    }
+
+    // Focus first input for better UX
+    document.getElementById('title').focus();
+</script>
+
+<style>
+    textarea {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+</style>

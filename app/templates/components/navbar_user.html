@@ -1,0 +1,12 @@
+<!-- Navbar component for authenticated users -->
+<div class="flex items-center space-x-4">
+    <div class="flex items-center gap-4">
+        <span class="text-sm text-slate-700">
+            <span class="text-slate-500">Logged in as</span>
+            <strong class="text-slate-900">{{ username }}</strong>
+        </span>
+    </div>
+    <a href="/auctions" class="text-sm text-slate-600 hover:text-slate-900 font-medium transition">Auctions</a>
+    <a href="/dashboard" class="text-sm text-slate-600 hover:text-slate-900 font-medium transition">Dashboard</a>
+    <a href="/logout" class="text-sm text-red-600 hover:text-red-700 font-medium transition">Logout</a>
+</div>
