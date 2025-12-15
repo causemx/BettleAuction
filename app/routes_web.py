@@ -94,9 +94,7 @@ async def get_auctions_list(
     if not username:
         return HTMLResponse(status_code=401)
     
-    print(f"[DEBUG LIST] Getting auctions for user: {username}")
     auctions = crud.get_all_auctions(db, skip=skip, limit=limit)
-    print(f"[DEBUG LIST] Found {len(auctions)} auctions")
     
     return templates.TemplateResponse(
         "components/auction_list.html",
