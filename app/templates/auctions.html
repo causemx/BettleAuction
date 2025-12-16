@@ -55,7 +55,7 @@
     </div>
 </div>
 
-<!-- Modal Scripts - FIXED VERSION -->
+<!-- Modal Scripts -->
 <script>
     let isSubmitting = false;
     
@@ -81,6 +81,18 @@
     }
 
     // ========================================================================
+    // VIEW AUCTION DETAIL
+    // ========================================================================
+    
+    function viewAuctionDetail(auctionId) {
+        console.log('[VIEW_DETAIL] Opening auction detail for ID:', auctionId);
+        htmx.ajax('GET', `/api/auctions/${auctionId}`, {
+            target: '#auctions-container',
+            swap: 'innerHTML'
+        });
+    }
+
+    // ========================================================================
     // MODAL MANAGEMENT
     // ========================================================================
     
@@ -90,7 +102,6 @@
         document.getElementById('auction-modal').classList.remove('hidden');
         document.getElementById('modal-content').innerHTML = '<div class="text-center py-8"><p class="text-slate-600">Loading form...</p></div>';
         
-        // ✅ FIXED: Use correct endpoint
         htmx.ajax('GET', '/api/auctions/create-form', {
             target: '#modal-content',
             swap: 'innerHTML'
@@ -128,7 +139,7 @@
     });
 
     // ========================================================================
-    // HTMX EVENT HANDLERS - FIXED
+    // HTMX EVENT HANDLERS
     // ========================================================================
     
     // Before request - mark that we're submitting
@@ -164,10 +175,6 @@
         if (target === 'modal-content' && status === 200) {
             const responseHtml = event.detail.xhr.responseText;
             
-            // ✅ FIXED: Check if response is a success (auction item) or error (form with error message)
-            // Success response will have the auction item HTML with class "group bg-white rounded-lg border"
-            // Error response will have the form HTML with error div
-            
             const isAuctionItem = responseHtml.includes('id="auction-');
             const isFormWithError = responseHtml.includes('class="p-4 bg-red-50 border border-red-200');
             const isJustForm = responseHtml.includes('<form') && !isAuctionItem && !isFormWithError;
@@ -186,7 +193,7 @@
                     console.log('[HTMX:AFTER] Reloading auction list');
                     closeModal();
                     loadAuctions();
-                }, 800);  // Wait 800ms before closing
+                }, 800);
             }
             // If we got a form back (error or form loading), keep modal open
             else if (isFormWithError || isJustForm) {

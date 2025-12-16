@@ -4,9 +4,12 @@
         {% for auction in auctions %}
         <div id="auction-{{ auction.id }}" class="group bg-white rounded-lg border border-slate-200 hover:border-slate-300 transition p-5 shadow-sm hover:shadow-md">
             <div class="flex justify-between items-start gap-4">
-                <!-- Content -->
-                <div class="flex-1 min-w-0">
-                    <h3 class="font-serif text-lg text-slate-900 mb-1 group-hover:text-slate-700 transition">
+                <!-- Content (Clickable) -->
+                <div 
+                    class="flex-1 min-w-0 cursor-pointer" 
+                    onclick="viewAuctionDetail({{ auction.id }})"
+                >
+                    <h3 class="font-serif text-lg text-slate-900 mb-1 group-hover:text-indigo-700 transition">
                         {{ auction.title }}
                     </h3>
                     <p class="text-sm text-slate-600 line-clamp-2 mb-3">
@@ -16,13 +19,15 @@
                         <span>By <strong>{{ auction.author }}</strong></span>
                         <span>•</span>
                         <span>{{ auction.create_at.strftime('%b %d, %Y') }}</span>
+                        <span>•</span>
+                        <span class="text-indigo-600 font-medium">Click to view details</span>
                     </div>
                 </div>
 
                 <!-- Actions -->
                 <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
-                        onclick="openEditModal({{ auction.id }})"
+                        onclick="event.stopPropagation(); openEditModal({{ auction.id }})"
                         class="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition"
                         title="Edit"
                     >
@@ -31,6 +36,7 @@
                         </svg>
                     </button>
                     <button
+                        onclick="event.stopPropagation()"
                         hx-delete="/api/auctions/{{ auction.id }}"
                         hx-target="#auction-{{ auction.id }}"
                         hx-swap="outerHTML swap:1s"
@@ -59,10 +65,23 @@
 
 <!-- Auto-refresh every 30 seconds -->
 <script>
-    setInterval(() => {
-        htmx.ajax('GET', '/api/auctions/list', {
+    // View auction detail function
+    function viewAuctionDetail(auctionId) {
+        console.log('[VIEW_DETAIL] Opening auction detail for ID:', auctionId);
+        htmx.ajax('GET', `/api/auctions/${auctionId}`, {
             target: '#auctions-container',
             swap: 'innerHTML'
         });
+    }
+
+    setInterval(() => {
+        // Only auto-refresh if we're viewing the list (not detail view)
+        const container = document.getElementById('auctions-container');
+        if (container && !container.querySelector('.prose')) {
+            htmx.ajax('GET', '/api/auctions/list', {
+                target: '#auctions-container',
+                swap: 'innerHTML'
+            });
+        }
     }, 30000);
 </script>
