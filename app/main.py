@@ -3,9 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from database import init_db
-from routes import router
 # from routes_image import router_img
 from routes_web import router_web
+from routes import router_auction
 
 init_db()
 
@@ -33,7 +33,7 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-app.include_router(router)
+app.include_router(router_auction)
 app.include_router(router_web)
 
 

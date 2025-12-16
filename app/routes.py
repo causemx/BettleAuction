@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends
+import os
+from fastapi.templating import Jinja2Templates
+from fastapi import APIRouter, Request, Depends
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from sqlalchemy.orm import Session
 from typing import List
 from database import get_db
@@ -6,26 +9,252 @@ from schemas import AuctionCreate, AuctionUpdate, AuctionResponse
 import crud
 
 
-router = APIRouter(prefix="/posts", tags=["posts"])
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TEMPLATES_DIR = os.path.join(BASE_DIR, "app", "templates")
+templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
-@router.get("", response_model=List[AuctionResponse])
-def get_all_posts(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    """Get all blog posts with pagination"""
-    posts = crud.get_all_auctions(db, skip, limit)
-    return posts
+router_auction = APIRouter(tags=["posts"])
 
-@router.post("", response_model=AuctionResponse)
-def create_auction(auction: AuctionCreate, db: Session = Depends(get_db)):
-    return crud.create_auction(db, auction)
 
-@router.get("/{auction_id}", response_model=AuctionResponse)
-def get_auction(auction_id: int, db: Session=Depends(get_db)):
-    return crud.get_auction_by_id(db, auction_id)
+# ============================================================================
+# AUCTION CRUD API ROUTES
+# ============================================================================
 
-@router.put("/{auction_id}", response_model=AuctionResponse)
-def update_auction(auction_id: int, auction: AuctionUpdate, db: Session=Depends(get_db)):
-    return crud.update_auction(db, auction_id, auction)
+@router_auction.get("/api/auctions/list", response_class=HTMLResponse)
+async def get_auctions_list(
+    request: Request,
+    skip: int = 0,
+    limit: int = 10,
+    db: Session = Depends(get_db)
+):
+    """Get auctions list as HTML (for HTMX)"""
+    username = request.cookies.get("username")
+    if not username:
+        return HTMLResponse(status_code=401)
+    
+    auctions = crud.get_all_auctions(db, skip=skip, limit=limit)
+    
+    return templates.TemplateResponse(
+        "components/auction_list.html",
+        {"request": request, "auctions": auctions}
+    )
 
-@router.delete("/{auction_id}", response_model=AuctionResponse)
-def delete_auction(auction_id: int, db: Session=Depends(get_db)):
-    return crud.delete_auction(db, auction_id)
+
+@router_auction.get("/api/auctions/create-form", response_class=HTMLResponse)
+async def get_create_form(request: Request):
+    """Get create form for auction - FIXED: includes request in context"""
+    username = request.cookies.get("username")
+    if not username:
+        return HTMLResponse(status_code=401)
+    
+    print(f"[DEBUG CREATE-FORM] Loading create form for user: {username}")
+    
+    return templates.TemplateResponse(
+        "components/auction_form.html",
+        {
+            "request": request,
+            "mode": "create"
+        }
+    )
+
+
+@router_auction.post("/api/auctions/create", response_class=HTMLResponse)
+async def create_auction(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Create new auction (form submission via HTMX)"""
+    username = request.cookies.get("username")
+    print(f"[DEBUG CREATE] Starting create_auction for user: {username}")
+    
+    if not username:
+        print("[DEBUG CREATE] No username - returning 401")
+        return HTMLResponse(status_code=401)
+    
+    user = crud.get_user_by_name(db, username=username)
+    print(f"[DEBUG CREATE] User found: {user is not None}")
+    
+    if not user:
+        print("[DEBUG CREATE] User not found in DB")
+        return HTMLResponse(status_code=404)
+    
+    try:
+        form_data = await request.form()
+        print(f"[DEBUG CREATE] Form keys: {list(form_data.keys())}")
+        
+        title = form_data.get("title", "").strip()
+        content = form_data.get("content", "").strip()
+        
+        print(f"[DEBUG CREATE] Title: '{title}' ({len(title)} chars)")
+        print(f"[DEBUG CREATE] Content length: {len(content)} chars")
+        
+        if not title or not content:
+            print("[DEBUG CREATE] Validation failed")
+            return templates.TemplateResponse(
+                "components/auction_form.html",
+                {
+                    "request": request,  # ← ALWAYS include request
+                    "error": "Title and content are required",
+                    "mode": "create"
+                }
+            )
+        
+        auction = AuctionCreate(
+            title=title,
+            content=content,
+            author=user.username
+        )
+        
+        print("[DEBUG CREATE] Creating auction in DB")
+        new_auction = crud.create_auction(db, auction)
+        print(f"[DEBUG CREATE] ✓ SUCCESS - id={new_auction.id}, title={new_auction.title}")
+        
+        return templates.TemplateResponse(
+            "components/auction_item.html",
+            {"request": request, "auction": new_auction}  # ← Include request
+        )
+    
+    except Exception as e:
+        print(f"[DEBUG CREATE] ERROR: {type(e).__name__}: {str(e)}")
+        import traceback
+        print(f"[DEBUG CREATE] Traceback: {traceback.format_exc()}")
+        return templates.TemplateResponse(
+            "components/auction_form.html",
+            {
+                "request": request,  # ← Include request
+                "error": str(e),
+                "mode": "create"
+            }
+        )
+
+
+@router_auction.get("/api/auctions/{auction_id}/edit", response_class=HTMLResponse)
+async def edit_auction_form(
+    request: Request,
+    auction_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get edit form for auction - FIXED: includes request in context"""
+    username = request.cookies.get("username")
+    if not username:
+        return HTMLResponse(status_code=401)
+    
+    auction = crud.get_auction_by_id(db, auction_id)
+    if not auction:
+        return HTMLResponse("<p class='text-red-600'>Auction not found</p>", status_code=404)
+    
+    return templates.TemplateResponse(
+        "components/auction_form.html",
+        {
+            "request": request,
+            "auction": auction,
+            "mode": "edit",
+            "auction_id": auction_id
+        }
+    )
+
+
+@router_auction.put("/api/auctions/{auction_id}", response_class=HTMLResponse)
+async def update_auction(
+    request: Request,
+    auction_id: int,
+    db: Session = Depends(get_db)
+):
+    """Update auction (form submission via HTMX)"""
+    username = request.cookies.get("username")
+    if not username:
+        return HTMLResponse(status_code=401)
+    
+    try:
+        form_data = await request.form()
+        
+        title = form_data.get("title", "").strip()
+        content = form_data.get("content", "").strip()
+        
+        if not title or not content:
+            auction = crud.get_auction_by_id(db, auction_id)
+            return templates.TemplateResponse(
+                "components/auction_form.html",
+                {
+                    "request": request,  # ← Include request
+                    "auction": auction,
+                    "error": "Title and content are required",
+                    "mode": "edit",
+                    "auction_id": auction_id
+                }
+            )
+        
+        auction_update = AuctionUpdate(
+            title=title,
+            content=content
+        )
+        
+        updated_auction = crud.update_auction(db, auction_id, auction_update)
+        
+        if not updated_auction:
+            return HTMLResponse("<p class='text-red-600'>Auction not found</p>", status_code=404)
+        
+        return templates.TemplateResponse(
+            "components/auction_item.html",
+            {"request": request, "auction": updated_auction}  # ← Include request
+        )
+    
+    except Exception as e:
+        print(f"[DEBUG UPDATE] Error: {str(e)}")
+        auction = crud.get_auction_by_id(db, auction_id)
+        return templates.TemplateResponse(
+            "components/auction_form.html",
+            {
+                "request": request,  # ← Include request
+                "auction": auction,
+                "error": str(e),
+                "mode": "edit",
+                "auction_id": auction_id
+            }
+        )
+
+
+@router_auction.delete("/api/auctions/{auction_id}", response_class=HTMLResponse)
+async def delete_auction(
+    request: Request,
+    auction_id: int,
+    db: Session = Depends(get_db)
+):
+    """Delete auction"""
+    username = request.cookies.get("username")
+    if not username:
+        return HTMLResponse(status_code=401)
+    
+    try:
+        auction = crud.delete_auction(db, auction_id)
+        
+        if not auction:
+            return HTMLResponse("<p class='text-red-600'>Auction not found</p>", status_code=404)
+        
+        return HTMLResponse("")
+    
+    except Exception as e:
+        print(f"[DEBUG DELETE] Error: {str(e)}")
+        return HTMLResponse(f"<p class='text-red-600'>Error: {str(e)}</p>", status_code=500)
+
+
+@router_auction.get("/api/auctions/{auction_id}", response_class=HTMLResponse)
+async def get_auction_detail(
+    request: Request,
+    auction_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get auction detail view"""
+    username = request.cookies.get("username")
+    if not username:
+        return HTMLResponse(status_code=401)
+    
+    auction = crud.get_auction_by_id(db, auction_id)
+    
+    if not auction:
+        return HTMLResponse("<p class='text-red-600'>Auction not found</p>", status_code=404)
+    
+    return templates.TemplateResponse(
+        "components/auction_detail.html",
+        {"request": request, "auction": auction}  # ← Include request
+    )
