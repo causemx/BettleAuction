@@ -1,15 +1,23 @@
 <!-- Auction Create/Edit Form Component -->
+{% if mode == 'edit' %}
+<!-- EDIT FORM - Uses PUT -->
 <form
-    hx-post="{% if mode == 'edit' %}/api/auctions/{{ auction_id }}{% else %}/api/auctions/create{% endif %}"
+    hx-put="/api/auctions/{{ auction_id }}"
     hx-target="#modal-content"
     hx-swap="outerHTML"
     class="space-y-5"
     onsubmit="return validateForm(event)"
 >
-    {% if mode == 'edit' %}
-    <!-- Method Override for PUT (HTMX) -->
-    <input type="hidden" name="_method" value="PUT">
-    {% endif %}
+{% else %}
+<!-- CREATE FORM - Uses POST -->
+<form
+    hx-post="/api/auctions/create"
+    hx-target="#modal-content"
+    hx-swap="outerHTML"
+    class="space-y-5"
+    onsubmit="return validateForm(event)"
+>
+{% endif %}
 
     <!-- Error Message -->
     {% if error %}
@@ -96,6 +104,12 @@
             alert('Title must be 255 characters or less');
             return false;
         }
+
+        console.log('[FORM_SUBMIT] Form validation passed', {
+            mode: '{{ mode }}',
+            title: title.substring(0, 50),
+            contentLength: content.length
+        });
 
         return true;
     }
