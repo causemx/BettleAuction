@@ -39,6 +39,13 @@
         </div>
     </div>
 
+    <!-- Image Display -->
+    {% if auction.image_path %}
+    <div class="mb-6 rounded-lg overflow-hidden shadow-md bg-slate-100">
+        <img src="/uploads/{{ auction.image_path }}" alt="{{ auction.title }}" class="w-full h-96 object-cover">
+    </div>
+    {% endif %}
+
     <!-- Auction Title -->
     <h1 class="text-3xl font-serif font-bold text-slate-900 mb-4">
         {{ auction.title }}

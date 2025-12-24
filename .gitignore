@@ -422,3 +422,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+app/uploads
+app/*.sql

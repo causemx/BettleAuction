@@ -1,25 +1,48 @@
 import os
+import crud
+import uuid
 from fastapi.templating import Jinja2Templates
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request, Depends, UploadFile, File, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from sqlalchemy.orm import Session
 from typing import List
 from database import get_db
 from schemas import AuctionCreate, AuctionUpdate, AuctionResponse
-import crud
 
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEMPLATES_DIR = os.path.join(BASE_DIR, "app", "templates")
+UPLOAD_DIR = os.path.join(BASE_DIR, "app", "uploads")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 router_auction = APIRouter(tags=["posts"])
 
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 
 # ============================================================================
 # AUCTION CRUD API ROUTES
 # ============================================================================
 
+@router_auction.post("/api/auctions/upload-image")
+async def upload_image(file: UploadFile = File(...)):
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Invalid format")
+    
+    filename = f"{uuid.uuid4()}{ext}"
+    filepath = os.path.join(UPLOAD_DIR, filename)
+     
+    contents = await file.read()
+    with open(filepath, "wb") as f:
+        f.write(contents)
+        
+    return JSONResponse({
+        "filename": filename,
+        "size": len(contents),
+        "path": filepath
+    })
+    
 @router_auction.get("/api/auctions/list", response_class=HTMLResponse)
 async def get_auctions_list(
     request: Request,
@@ -84,6 +107,7 @@ async def create_auction(
         
         title = form_data.get("title", "").strip()
         content = form_data.get("content", "").strip()
+        image_filename = form_data.get("image_filename", "").strip()
         
         print(f"[DEBUG CREATE] Title: '{title}' ({len(title)} chars)")
         print(f"[DEBUG CREATE] Content length: {len(content)} chars")
@@ -102,7 +126,8 @@ async def create_auction(
         auction = AuctionCreate(
             title=title,
             content=content,
-            author=user.username
+            author=user.username,
+            image_path = image_filename if image_filename else None
         )
         
         print("[DEBUG CREATE] Creating auction in DB")
@@ -170,6 +195,7 @@ async def update_auction(
         
         title = form_data.get("title", "").strip()
         content = form_data.get("content", "").strip()
+        image_filename = form_data.get("image_filename", "").strip()
         
         if not title or not content:
             auction = crud.get_auction_by_id(db, auction_id)
@@ -186,7 +212,8 @@ async def update_auction(
         
         auction_update = AuctionUpdate(
             title=title,
-            content=content
+            content=content,
+            image_path=image_filename if image_filename else None
         )
         
         updated_auction = crud.update_auction(db, auction_id, auction_update)
@@ -230,6 +257,15 @@ async def delete_auction(
         
         if not auction:
             return HTMLResponse("<p class='text-red-600'>Auction not found</p>", status_code=404)
+        
+        # Delete image file if exist
+        if auction.image_path:
+            image_path = os.path.join(UPLOAD_DIR, auction.image_path)
+            try:
+                if os.path.exists(image_path):
+                    os.remove(image_path)
+            except Exception:
+                print("Could not delete the image file")
         
         return HTMLResponse("")
     

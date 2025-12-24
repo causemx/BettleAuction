@@ -31,6 +31,8 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
+
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 app.include_router(router_auction)
