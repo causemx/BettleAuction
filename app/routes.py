@@ -38,6 +38,7 @@ async def upload_image(file: UploadFile = File(...)):
         f.write(contents)
         
     return JSONResponse({
+        "success": True,
         "filename": filename,
         "size": len(contents),
         "path": filepath
