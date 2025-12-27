@@ -109,6 +109,7 @@ async def create_auction(
         title = form_data.get("title", "").strip()
         content = form_data.get("content", "").strip()
         image_filename = form_data.get("image_filename", "").strip()
+        image_filenames_json = form_data.get("image_filenames", "").strip()
         
         print(f"[DEBUG CREATE] Title: '{title}' ({len(title)} chars)")
         print(f"[DEBUG CREATE] Content length: {len(content)} chars")
@@ -128,7 +129,8 @@ async def create_auction(
             title=title,
             content=content,
             author=user.username,
-            image_path = image_filename if image_filename else None
+            image_path = image_filename if image_filename else None,
+            image_paths=image_filenames_json
         )
         
         print("[DEBUG CREATE] Creating auction in DB")
@@ -197,6 +199,7 @@ async def update_auction(
         title = form_data.get("title", "").strip()
         content = form_data.get("content", "").strip()
         image_filename = form_data.get("image_filename", "").strip()
+        image_filenames_json = form_data.get("image_filenames", "").strip()
         
         if not title or not content:
             auction = crud.get_auction_by_id(db, auction_id)
@@ -214,7 +217,8 @@ async def update_auction(
         auction_update = AuctionUpdate(
             title=title,
             content=content,
-            image_path=image_filename if image_filename else None
+            image_path=image_filename if image_filename else None,
+            image_paths=image_filenames_json if image_filenames_json else None
         )
         
         updated_auction = crud.update_auction(db, auction_id, auction_update)
@@ -268,7 +272,17 @@ async def delete_auction(
             except Exception:
                 print("Could not delete the image file")
         
-        return HTMLResponse("")
+        # Delete multiple images
+        if auction.image_paths:
+            import json
+            try:
+                image_paths = json.loads(auction.image_paths)
+                for img_filename in image_paths:
+                    image_path = os.path.join(UPLOAD_DIR, img_filename)
+                    if os.path.exists(image_path):
+                        os.remove(image_path)
+            except json.JSONDecodeError:
+                pass
     
     except Exception as e:
         print(f"[DEBUG DELETE] Error: {str(e)}")

@@ -7,19 +7,22 @@ class AuctionCreate(BaseModel):
     title: str
     content: str
     author: str
-    image_path : Optional[str] = None
+    image_path: Optional[str] = None
+    image_paths: Optional[str] = None
 
 class AuctionUpdate(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
     author: Optional[str] = None
     image_path: Optional[str] = None
+    image_paths: Optional[str] = None
     
 class AuctionResponse(BaseModel):
     title: str
     content: str
     author: str
     image_path: Optional[str] = None
+    image_paths: Optional[str] = None
     create_at: datetime
     update_at: datetime
 

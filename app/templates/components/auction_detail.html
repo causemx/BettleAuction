@@ -1,4 +1,4 @@
-<!-- Auction Detail View Component -->
+<!-- Auction Detail View Component with Fixed Image Carousel -->
 <div class="bg-white rounded-lg border border-slate-200 shadow-lg p-6">
     <!-- Header with Back Button -->
     <div class="flex justify-between items-start mb-6">
@@ -39,10 +39,48 @@
         </div>
     </div>
 
-    <!-- Image Display -->
-    {% if auction.image_path %}
+    <!-- Image Carousel/Gallery Section -->
+    {% if auction.image_path or auction.image_paths %}
     <div class="mb-6 rounded-lg overflow-hidden shadow-md bg-slate-100">
-        <img src="/uploads/{{ auction.image_path }}" alt="{{ auction.title }}" class="w-full h-96 object-cover">
+        <div id="carousel-container" class="relative flex items-center justify-center max-h-[600px] bg-slate-100">
+            <!-- Main Image Display -->
+            <img 
+                id="carousel-image"
+                src="/uploads/{{ auction.image_path }}" 
+                alt="{{ auction.title }}" 
+                class="w-full h-auto max-h-[600px] object-contain"
+                loading="lazy"
+            >
+
+            <!-- Previous Button -->
+            <button
+                id="carousel-prev"
+                onclick="prevImage()"
+                class="absolute left-4 z-10 bg-black/50 hover:bg-black/70 text-white rounded-full p-2 transition"
+                style="display: none;"
+            >
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                </svg>
+            </button>
+
+            <!-- Next Button -->
+            <button
+                id="carousel-next"
+                onclick="nextImage()"
+                class="absolute right-4 z-10 bg-black/50 hover:bg-black/70 text-white rounded-full p-2 transition"
+                style="display: none;"
+            >
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Carousel Indicators (Dots) -->
+        <div id="carousel-indicators" class="flex justify-center gap-2 bg-slate-100 py-3" style="display: none;">
+            <!-- Dots will be added by JavaScript -->
+        </div>
     </div>
     {% endif %}
 
@@ -97,6 +135,153 @@
     </div>
 </div>
 
+<script>
+    // ========================================================================
+    // CAROUSEL MANAGEMENT - FIXED FOR MULTIPLE IMAGES
+    // ========================================================================
+    
+    let carouselImages = [];
+    let currentImageIndex = 0;
+
+    // Initialize carousel with images
+    function initializeCarousel() {
+        // Get primary image
+        const primaryImage = '{{ auction.image_path }}';
+        
+        // Get images from image_paths JSON
+        {% if auction.image_paths %}
+        try {
+            // Parse the JSON string from image_paths
+            const imagePaths = {{ auction.image_paths | safe }};
+            console.log('[CAROUSEL] Parsed image_paths:', imagePaths);
+            
+            if (Array.isArray(imagePaths) && imagePaths.length > 0) {
+                carouselImages = imagePaths;
+            } else if (primaryImage) {
+                carouselImages = [primaryImage];
+            }
+        } catch (e) {
+            console.error('[CAROUSEL] Error parsing image_paths:', e);
+            if (primaryImage) {
+                carouselImages = [primaryImage];
+            }
+        }
+        {% else %}
+        // Fallback to primary image if no image_paths
+        if (primaryImage) {
+            carouselImages = [primaryImage];
+        }
+        {% endif %}
+        
+        console.log('[CAROUSEL] Total images found:', carouselImages.length);
+        console.log('[CAROUSEL] Images:', carouselImages);
+        
+        // Show/hide buttons based on number of images
+        if (carouselImages.length > 1) {
+            console.log('[CAROUSEL] Multiple images detected - showing controls');
+            document.getElementById('carousel-prev').style.display = 'block';
+            document.getElementById('carousel-next').style.display = 'block';
+            document.getElementById('carousel-indicators').style.display = 'flex';
+            
+            // Create indicator dots
+            createIndicators();
+        } else {
+            console.log('[CAROUSEL] Single image - hiding controls');
+        }
+        
+        // Set first image
+        if (carouselImages.length > 0) {
+            updateCarousel(0);
+        }
+    }
+
+    // Create indicator dots
+    function createIndicators() {
+        const indicatorContainer = document.getElementById('carousel-indicators');
+        indicatorContainer.innerHTML = ''; // Clear existing
+        
+        carouselImages.forEach((_, index) => {
+            const dot = document.createElement('button');
+            dot.type = 'button';
+            dot.className = 'w-2 h-2 rounded-full transition-all ';
+            
+            if (index === 0) {
+                dot.className += 'bg-slate-700 w-6';
+            } else {
+                dot.className += 'bg-slate-400 hover:bg-slate-500';
+            }
+            
+            dot.onclick = (e) => {
+                e.preventDefault();
+                updateCarousel(index);
+            };
+            
+            indicatorContainer.appendChild(dot);
+        });
+    }
+
+    // Update carousel display
+    function updateCarousel(index) {
+        if (carouselImages.length === 0) {
+            console.error('[CAROUSEL] No images to display');
+            return;
+        }
+        
+        // Validate index
+        if (index < 0) index = carouselImages.length - 1;
+        if (index >= carouselImages.length) index = 0;
+        
+        currentImageIndex = index;
+        
+        // Update image
+        const imagePath = carouselImages[index];
+        const imgElement = document.getElementById('carousel-image');
+        const fullPath = '/uploads/' + imagePath;
+        
+        console.log('[CAROUSEL] Updating to image', index, ':', imagePath);
+        imgElement.src = fullPath;
+        imgElement.alt = `{{ auction.title }} - Image ${index + 1}`;
+        
+        // Update indicators
+        updateIndicators();
+    }
+
+    // Update indicator dots
+    function updateIndicators() {
+        const dots = document.querySelectorAll('#carousel-indicators button');
+        dots.forEach((dot, index) => {
+            if (index === currentImageIndex) {
+                dot.className = 'w-6 h-2 rounded-full transition-all bg-slate-700';
+            } else {
+                dot.className = 'w-2 h-2 rounded-full transition-all bg-slate-400 hover:bg-slate-500';
+            }
+        });
+    }
+
+    // Navigation functions
+    function prevImage() {
+        console.log('[CAROUSEL] Previous clicked. Current:', currentImageIndex);
+        updateCarousel(currentImageIndex - 1);
+    }
+
+    function nextImage() {
+        console.log('[CAROUSEL] Next clicked. Current:', currentImageIndex);
+        updateCarousel(currentImageIndex + 1);
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('[CAROUSEL] Initializing carousel');
+        initializeCarousel();
+    });
+
+    // Also initialize immediately in case DOMContentLoaded already fired
+    if (document.readyState !== 'loading') {
+        console.log('[CAROUSEL] DOM already loaded, initializing now');
+        initializeCarousel();
+    }
+</script>
+
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&display=swap');
     
@@ -112,5 +297,18 @@
     .whitespace-pre-wrap {
         white-space: pre-wrap;
         word-wrap: break-word;
+    }
+
+    /* Carousel responsive sizing */
+    @media (max-width: 768px) {
+        #carousel-image {
+            max-height: 400px;
+        }
+    }
+
+    @media (max-width: 480px) {
+        #carousel-image {
+            max-height: 300px;
+        }
     }
 </style>

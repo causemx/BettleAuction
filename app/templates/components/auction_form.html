@@ -1,4 +1,4 @@
-<!-- Auction Create/Edit Form Component with Image Upload -->
+<!-- Auction Create/Edit Form Component with Multiple Image Upload -->
 {% if mode == 'edit' %}
 <!-- EDIT FORM - Uses PUT -->
 <form
@@ -60,25 +60,52 @@
         <p class="text-xs text-slate-500 mt-1">Provide a detailed description</p>
     </div>
 
-    <!-- Image Upload Field -->
+    <!-- Multiple Image Upload Field -->
     <div>
-        <label for="image_upload" class="block text-sm font-medium text-slate-900 mb-2">
-            Auction Image
+        <label class="block text-sm font-medium text-slate-900 mb-2">
+            Auction Images <span class="text-xs text-slate-500">(Multiple)</span>
         </label>
         
-        <!-- Image Preview -->
-        {% if auction and auction.image_path %}
-        <div id="image-preview-container" class="mb-3 p-3 bg-slate-100 rounded-lg">
-            <img id="image-preview" src="/uploads/{{ auction.image_path }}" alt="Auction image" class="max-w-xs h-auto rounded-lg">
-            <p class="text-xs text-slate-600 mt-2">Current image</p>
+        <!-- Image Gallery Preview -->
+        <div id="image-gallery" class="mb-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {% if auction and auction.image_path %}
+            <!-- Display existing image if in edit mode -->
+            <div class="relative group">
+                <div class="aspect-square bg-slate-100 rounded-lg overflow-hidden border-2 border-slate-200">
+                    <img 
+                        src="/uploads/{{ auction.image_path }}" 
+                        alt="Auction image" 
+                        class="w-full h-full object-cover"
+                    >
+                </div>
+                <button
+                    type="button"
+                    onclick="removeImageFromGallery(this, true)"
+                    class="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Remove image"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+                <p class="text-xs text-slate-600 mt-1 text-center truncate">Current</p>
+            </div>
+            {% endif %}
         </div>
-        {% else %}
-        <div id="image-preview-container" class="hidden mb-3 p-3 bg-slate-100 rounded-lg">
-            <img id="image-preview" alt="Image preview" class="max-w-xs h-auto rounded-lg">
-            <p class="text-xs text-slate-600 mt-2">Image preview</p>
+
+        <!-- Upload Status -->
+        <div id="upload-status" class="hidden mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <div class="flex items-center">
+                <div class="animate-spin mr-2">⏳</div>
+                <span id="status-text" class="text-sm text-blue-700">Uploading image...</span>
+            </div>
         </div>
-        {% endif %}
-        
+
+        <!-- Error Status -->
+        <div id="upload-error" class="hidden mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <p id="error-text" class="text-sm text-red-700 font-medium"></p>
+        </div>
+
         <!-- File Input -->
         <div class="relative">
             <input
@@ -91,23 +118,32 @@
             <button
                 type="button"
                 id="upload-btn"
-                class="w-full px-4 py-2.5 border-2 border-dashed border-slate-300 rounded-lg hover:border-slate-400 transition bg-slate-50 text-slate-700 font-medium"
+                class="w-full px-4 py-3 border-2 border-dashed border-slate-300 rounded-lg hover:border-slate-400 hover:bg-slate-50 transition bg-white text-slate-700 font-medium"
                 onclick="document.getElementById('image_upload').click()"
             >
-                📷 Choose Image or Drag & Drop
+                📷 Add Image (Drag & Drop or Click)
             </button>
-            <input type="hidden" id="image_filename" name="image_filename" value="{% if auction %}{{ auction.image_path }}{% endif %}">
         </div>
+
+        <!-- Hidden inputs for image filenames (JSON array) -->
+        <input 
+            type="hidden" 
+            id="image_filenames" 
+            name="image_filenames" 
+            value="{% if auction and auction.image_path %}{{ auction.image_path }}{% endif %}"
+        >
+
+        <!-- Single primary image filename (for backward compatibility) -->
+        <input 
+            type="hidden" 
+            id="image_filename" 
+            name="image_filename" 
+            value="{% if auction %}{{ auction.image_path }}{% endif %}"
+        >
         
-        <!-- Upload Status -->
-        <div id="upload-status" class="hidden mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <div class="flex items-center">
-                <div class="animate-spin mr-2">⏳</div>
-                <span id="status-text" class="text-sm text-blue-700">Uploading image...</span>
-            </div>
-        </div>
-        
-        <p class="text-xs text-slate-500 mt-2">Supported: JPG, PNG, GIF, WebP (Max 5MB)</p>
+        <p class="text-xs text-slate-500 mt-2">
+            Supported: JPG, PNG, GIF, WebP (Max 5MB per image) • Recommended: 3-6 images
+        </p>
     </div>
 
     <!-- Form Actions -->
@@ -133,22 +169,50 @@
 </form>
 
 <script>
+    // ========================================================================
+    // IMAGE UPLOAD MANAGEMENT - MULTIPLE IMAGES SUPPORT
+    // ========================================================================
+    
     const imageUpload = document.getElementById('image_upload');
     const uploadBtn = document.getElementById('upload-btn');
     const uploadStatus = document.getElementById('upload-status');
     const statusText = document.getElementById('status-text');
-    const imageFilename = document.getElementById('image_filename');
-    const previewContainer = document.getElementById('image-preview-container');
-    const previewImg = document.getElementById('image-preview');
+    const uploadError = document.getElementById('upload-error');
+    const errorText = document.getElementById('error-text');
+    const imageGallery = document.getElementById('image-gallery');
+    const imageFilenames = document.getElementById('image_filenames');
+    const imagePrimaryFilename = document.getElementById('image_filename');
 
-    // Handle file selection
+    // Store uploaded images as array
+    let uploadedImages = [];
+    
+    // Initialize with existing image if in edit mode
+    function initializeExistingImages() {
+        const existingPrimary = imagePrimaryFilename.value;
+        if (existingPrimary) {
+            uploadedImages = [existingPrimary];
+        }
+    }
+    
+    initializeExistingImages();
+
+    // ========================================================================
+    // FILE INPUT HANDLING
+    // ========================================================================
+
     imageUpload.addEventListener('change', (e) => {
         if (e.target.files.length > 0) {
-            handleImageUpload(e.target.files[0]);
+            const files = Array.from(e.target.files);
+            files.forEach(file => handleImageUpload(file));
         }
+        // Reset input so user can select same file again
+        imageUpload.value = '';
     });
 
-    // Handle drag and drop
+    // ========================================================================
+    // DRAG & DROP HANDLING
+    // ========================================================================
+
     uploadBtn.addEventListener('dragover', (e) => {
         e.preventDefault();
         uploadBtn.classList.add('border-slate-500', 'bg-slate-100');
@@ -163,74 +227,181 @@
         uploadBtn.classList.remove('border-slate-500', 'bg-slate-100');
         
         if (e.dataTransfer.files.length > 0) {
-            const file = e.dataTransfer.files[0];
-            imageUpload.files = e.dataTransfer.files;
-            handleImageUpload(file);
+            const files = Array.from(e.dataTransfer.files);
+            files.forEach(file => handleImageUpload(file));
         }
     });
+
+    // ========================================================================
+    // UPLOAD IMAGE FUNCTION
+    // ========================================================================
 
     async function handleImageUpload(file) {
         // Validate file type
         const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
         if (!allowedTypes.includes(file.type)) {
-            alert('Invalid file type. Please upload JPG, PNG, GIF, or WebP');
+            showUploadError('Invalid file type: ' + file.name + '. Please upload JPG, PNG, GIF, or WebP');
             return;
         }
 
         // Validate file size (5MB)
         if (file.size > 5 * 1024 * 1024) {
-            alert('File too large. Maximum size is 5MB');
+            showUploadError('File too large: ' + file.name + '. Maximum size is 5MB');
             return;
         }
 
-        // Show loading state
-        uploadStatus.classList.remove('hidden');
-        statusText.textContent = `Uploading ${file.name}...`;
-
-        const formData = new FormData();
-        formData.append('file', file);
-
-        try {
-            const response = await fetch('/api/auctions/upload-image', {
-                method: 'POST',
-                body: formData
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                // Update hidden input with filename
-                imageFilename.value = result.filename;
-
-                // Show preview
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    previewImg.src = e.target.result;
-                    previewContainer.classList.remove('hidden');
-                };
-                reader.readAsDataURL(file);
-
-                // Update button text
-                uploadBtn.textContent = `✓ ${file.name} uploaded`;
-                uploadBtn.classList.add('border-green-300', 'bg-green-50', 'text-green-700');
-
-                statusText.textContent = 'Image uploaded successfully!';
-                statusText.parentElement.classList.add('bg-green-50', 'border-green-200');
-                statusText.classList.add('text-green-700');
-
-                setTimeout(() => {
-                    uploadStatus.classList.add('hidden');
-                }, 2000);
-            } else {
-                alert('Upload failed: ' + (result.error || 'Unknown error'));
-                uploadStatus.classList.add('hidden');
+        // Check for duplicates
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const fileData = e.target.result;
+            
+            // Simple duplicate check (you could use hash for better accuracy)
+            if (uploadedImages.length > 0) {
+                // Just check file size and name as simple duplicate prevention
+                const isDuplicate = Array.from(imageGallery.querySelectorAll('img')).some(img => {
+                    return img.alt === file.name;
+                });
+                
+                if (isDuplicate) {
+                    showUploadError('Image "' + file.name + '" already uploaded');
+                    return;
+                }
             }
-        } catch (error) {
-            console.error('Upload error:', error);
-            alert('Upload error: ' + error.message);
-            uploadStatus.classList.add('hidden');
-        }
+            
+            // Show loading state
+            hideUploadError();
+            uploadStatus.classList.remove('hidden');
+            statusText.textContent = `Uploading ${file.name}...`;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/api/auctions/upload-image', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Add filename to array
+                    uploadedImages.push(result.filename);
+                    updateImageFilenames();
+
+                    // Add to gallery
+                    addImageToGallery(fileData, result.filename, file.name);
+
+                    // Update status
+                    statusText.textContent = `✓ ${file.name} uploaded successfully!`;
+                    statusText.parentElement.classList.add('bg-green-50', 'border-green-200');
+                    statusText.classList.add('text-green-700');
+
+                    setTimeout(() => {
+                        uploadStatus.classList.add('hidden');
+                        statusText.parentElement.classList.remove('bg-green-50', 'border-green-200');
+                        statusText.classList.remove('text-green-700');
+                    }, 2000);
+                } else {
+                    showUploadError('Upload failed for ' + file.name + ': ' + (result.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                showUploadError('Upload error: ' + error.message);
+            }
+        };
+        reader.readAsDataURL(file);
     }
+
+    // ========================================================================
+    // ADD IMAGE TO GALLERY
+    // ========================================================================
+
+    function addImageToGallery(imageData, filename, originalName) {
+        const imageItem = document.createElement('div');
+        imageItem.className = 'relative group';
+        imageItem.dataset.filename = filename;
+        imageItem.innerHTML = `
+            <div class="aspect-square bg-slate-100 rounded-lg overflow-hidden border-2 border-slate-300 hover:border-slate-400 transition">
+                <img 
+                    src="${imageData}" 
+                    alt="${originalName}"
+                    class="w-full h-full object-cover"
+                >
+            </div>
+            <button
+                type="button"
+                onclick="removeImageFromGallery(this, false)"
+                class="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700"
+                title="Remove image"
+            >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+            <p class="text-xs text-slate-600 mt-1 text-center truncate">${originalName}</p>
+        `;
+        
+        imageGallery.appendChild(imageItem);
+    }
+
+    // ========================================================================
+    // REMOVE IMAGE FROM GALLERY
+    // ========================================================================
+
+    function removeImageFromGallery(button, isExisting) {
+        const imageItem = button.closest('.relative');
+        const filename = imageItem.dataset.filename;
+        
+        if (isExisting) {
+            // For existing image in edit mode
+            uploadedImages = [];
+            imagePrimaryFilename.value = '';
+        } else {
+            // For newly uploaded images
+            uploadedImages = uploadedImages.filter(f => f !== filename);
+        }
+        
+        updateImageFilenames();
+        imageItem.remove();
+    }
+
+    // ========================================================================
+    // UPDATE HIDDEN INPUTS
+    // ========================================================================
+
+    function updateImageFilenames() {
+        // Store as JSON for multiple images
+        imageFilenames.value = JSON.stringify(uploadedImages);
+        
+        // Also set primary image (first one) for backward compatibility
+        if (uploadedImages.length > 0) {
+            imagePrimaryFilename.value = uploadedImages[0];
+        } else {
+            imagePrimaryFilename.value = '';
+        }
+        
+        console.log('[IMAGES] Updated images:', uploadedImages);
+    }
+
+    // ========================================================================
+    // ERROR HANDLING
+    // ========================================================================
+
+    function showUploadError(message) {
+        uploadError.classList.remove('hidden');
+        errorText.textContent = '⚠️ ' + message;
+        uploadStatus.classList.add('hidden');
+    }
+
+    function hideUploadError() {
+        uploadError.classList.add('hidden');
+        errorText.textContent = '';
+    }
+
+    // ========================================================================
+    // FORM VALIDATION
+    // ========================================================================
 
     function validateForm(event) {
         const title = document.getElementById('title').value.trim();
@@ -254,11 +425,18 @@
             return false;
         }
 
+        if (uploadedImages.length === 0) {
+            event.preventDefault();
+            alert('Please upload at least one image');
+            return false;
+        }
+
         console.log('[FORM_SUBMIT] Form validation passed', {
             mode: '{{ mode }}',
             title: title.substring(0, 50),
             contentLength: content.length,
-            image: imageFilename.value || 'none'
+            imageCount: uploadedImages.length,
+            images: uploadedImages
         });
 
         return true;
@@ -271,5 +449,48 @@
 <style>
     textarea {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    .aspect-square {
+        aspect-ratio: 1 / 1;
+    }
+
+    /* Animations */
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+        to {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+
+    .relative {
+        animation: fadeIn 0.3s ease-out;
+    }
+
+    @keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    .animate-spin {
+        animation: spin 1s linear infinite;
+    }
+
+    /* Responsive grid */
+    @media (max-width: 768px) {
+        #image-gallery {
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        }
+    }
+
+    @media (max-width: 480px) {
+        #image-gallery {
+            grid-template-columns: repeat(2, 1fr);
+        }
     }
 </style>
