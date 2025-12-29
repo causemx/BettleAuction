@@ -1,13 +1,13 @@
 import os
 import crud
 import uuid
+from datetime import datetime
 from fastapi.templating import Jinja2Templates
 from fastapi import APIRouter, Request, Depends, UploadFile, File, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from sqlalchemy.orm import Session
-from typing import List
 from database import get_db
-from schemas import AuctionCreate, AuctionUpdate, AuctionResponse
+from models import AuctionCreate, AuctionUpdate, AuctionResponse
 
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -108,11 +108,20 @@ async def create_auction(
         
         title = form_data.get("title", "").strip()
         content = form_data.get("content", "").strip()
+        start_price_str = form_data.get("start_price", "").strip()
+        ends_at_str = form_data.get("ends_at", "").strip()
         image_filename = form_data.get("image_filename", "").strip()
         image_filenames_json = form_data.get("image_filenames", "").strip()
         
-        print(f"[DEBUG CREATE] Title: '{title}' ({len(title)} chars)")
-        print(f"[DEBUG CREATE] Content length: {len(content)} chars")
+        try:
+            start_price = float(start_price_str)
+            if start_price < 0:
+                raise ValueError("Start price must positive")
+            ends_at = datetime.fromisoformat(ends_at_str)
+            if ends_at <= datetime.utcnow():
+                raise ValueError("End time must be in future")
+        except ValueError as e:
+            print(e)
         
         if not title or not content:
             print("[DEBUG CREATE] Validation failed")
@@ -129,6 +138,8 @@ async def create_auction(
             title=title,
             content=content,
             author=user.username,
+            start_price=start_price,
+            ends_at=ends_at,
             image_path = image_filename if image_filename else None,
             image_paths=image_filenames_json
         )

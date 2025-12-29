@@ -7,8 +7,8 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPBasicCredentials 
 from sqlalchemy.orm import Session
 from database import get_db
-from models import UserModel
-from schemas import TokenData
+from schemas import UserModel
+from models import TokenData
 from dotenv import load_dotenv
 
 

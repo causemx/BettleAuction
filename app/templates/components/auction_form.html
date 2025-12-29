@@ -1,4 +1,4 @@
-<!-- Auction Create/Edit Form Component with Multiple Image Upload -->
+<!-- Auction Create/Edit Form Component with Multiple Image Upload + Bidding Fields -->
 {% if mode == 'edit' %}
 <!-- EDIT FORM - Uses PUT -->
 <form
@@ -58,6 +58,47 @@
             class="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition bg-slate-50 placeholder-slate-400 resize-none"
         >{% if auction %}{{ auction.content }}{% endif %}</textarea>
         <p class="text-xs text-slate-500 mt-1">Provide a detailed description</p>
+    </div>
+
+    <!-- Two Column Layout for Bidding Fields -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <!-- Start Price Field -->
+        <div>
+            <label for="start_price" class="block text-sm font-medium text-slate-900 mb-2">
+                Starting Price <span class="text-red-500">*</span>
+            </label>
+            <div class="relative">
+                <span class="absolute left-3 top-3 text-slate-600 font-semibold">$</span>
+                <input
+                    type="number"
+                    id="start_price"
+                    name="start_price"
+                    required
+                    step="0.01"
+                    min="0.01"
+                    value="{% if auction %}{{ auction.start_price }}{% endif %}"
+                    placeholder="0.00"
+                    class="w-full pl-8 pr-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition bg-slate-50 placeholder-slate-400"
+                />
+            </div>
+            <p class="text-xs text-slate-500 mt-1">Minimum starting bid amount</p>
+        </div>
+
+        <!-- Auction End Time Field -->
+        <div>
+            <label for="ends_at" class="block text-sm font-medium text-slate-900 mb-2">
+                Auction Ends At <span class="text-red-500">*</span>
+            </label>
+            <input
+                type="datetime-local"
+                id="ends_at"
+                name="ends_at"
+                required
+                value="{% if auction %}{{ auction.ends_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}"
+                class="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition bg-slate-50 placeholder-slate-400"
+            />
+            <p class="text-xs text-slate-500 mt-1">When the auction will end</p>
+        </div>
     </div>
 
     <!-- Multiple Image Upload Field -->
@@ -406,7 +447,10 @@
     function validateForm(event) {
         const title = document.getElementById('title').value.trim();
         const content = document.getElementById('content').value.trim();
+        const startPrice = parseFloat(document.getElementById('start_price').value);
+        const endsAt = document.getElementById('ends_at').value;
 
+        // Validate basic fields
         if (!title) {
             event.preventDefault();
             alert('Please enter a title');
@@ -425,6 +469,30 @@
             return false;
         }
 
+        // Validate start price
+        if (isNaN(startPrice) || startPrice <= 0) {
+            event.preventDefault();
+            alert('Please enter a valid starting price (must be greater than 0)');
+            return false;
+        }
+
+        // Validate end time
+        if (!endsAt) {
+            event.preventDefault();
+            alert('Please select an end time for the auction');
+            return false;
+        }
+
+        // Validate end time is in the future
+        const endsAtDate = new Date(endsAt);
+        const now = new Date();
+        if (endsAtDate <= now) {
+            event.preventDefault();
+            alert('Auction end time must be in the future');
+            return false;
+        }
+
+        // Validate images
         if (uploadedImages.length === 0) {
             event.preventDefault();
             alert('Please upload at least one image');
@@ -435,6 +503,8 @@
             mode: '{{ mode }}',
             title: title.substring(0, 50),
             contentLength: content.length,
+            startPrice: startPrice,
+            endsAt: endsAt,
             imageCount: uploadedImages.length,
             images: uploadedImages
         });

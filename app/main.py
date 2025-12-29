@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles 
 from database import init_db
 # from routes_image import router_img
 from routes_web import router_web

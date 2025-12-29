@@ -11,7 +11,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from datetime import timedelta
 from auth import create_access_token
-from schemas import RegisterRequest, LoginRequest, AuctionCreate, AuctionUpdate
+from models import RegisterRequest, LoginRequest, AuctionCreate, AuctionUpdate
 from database import get_db
 
 # Setup templates

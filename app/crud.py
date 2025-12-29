@@ -1,8 +1,8 @@
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from auth import hash_password, verify_password
-from models import Auction, Role, UserModel
-from schemas import AuctionCreate, AuctionUpdate
+from schemas import Auction, Role, UserModel
+from models import AuctionCreate, AuctionUpdate
 
 def get_all_auctions(db: Session, skip: int = 0, limit: int = 10) -> List[Auction]:
     """Get all auctions with pagination"""
@@ -16,7 +16,12 @@ def get_auction_by_id(db: Session, auction_id: int) -> Optional[Auction]:
 
 def create_auction(db: Session, auction: AuctionCreate) -> Auction:
     """Create a new auction"""
-    db_auction = Auction(**auction.model_dump())
+    auction_data = auction.model_dump()
+    if auction_data.get("current_price") is None:
+        auction_data['current_price'] = auction_data['start_price']
+    if auction_data.get('is_active') is None:
+        auction_data['is_active'] = True
+    db_auction = Auction(**auction_data)
     db.add(db_auction)
     db.commit()
     db.refresh(db_auction)

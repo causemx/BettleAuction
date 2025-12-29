@@ -1,76 +1,56 @@
-from pydantic import BaseModel, EmailStr, field_validator
+import enum
+from sqlalchemy import (
+    Column,
+    Boolean,
+    Float, 
+    Integer, 
+    String, 
+    Text, 
+    DateTime, 
+    Enum
+    )
 from datetime import datetime
-from typing import Optional
-from models import Role
+from database import Base
 
-class AuctionCreate(BaseModel):
-    title: str
-    content: str
-    author: str
-    image_path: Optional[str] = None
-    image_paths: Optional[str] = None
 
-class AuctionUpdate(BaseModel):
-    title: Optional[str] = None
-    content: Optional[str] = None
-    author: Optional[str] = None
-    image_path: Optional[str] = None
-    image_paths: Optional[str] = None
+class Role(str, enum.Enum):
+    USER = 'user'
+    ADMIN = 'admin'
     
-class AuctionResponse(BaseModel):
-    title: str
-    content: str
-    author: str
-    image_path: Optional[str] = None
-    image_paths: Optional[str] = None
-    create_at: datetime
-    update_at: datetime
-
-class UserCreate(BaseModel):
-    username: str
-    email: EmailStr
-    password: str
-
-class UserResponse(BaseModel):
-    id: int
-    username: str
-    email: EmailStr
-    role: str
-    create_at: datetime
+class UserModel(Base):
+    __tablename__ = "users"
     
-    # pydantic V2 formation
-    model_config = {
-        'from_attributes': True
-    }
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(100), unique=True, index=True)
+    email = Column(String, unique=True, index=True)
+    hashed_password = Column(String)
+    role = Column(Enum(Role), default=Role.USER)
+    create_at = Column(DateTime, default=datetime.utcnow)
+    update_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    @field_validator('role')
-    @classmethod
-    def serialize_role(cls, v):
-        """Convert Role enum to string"""
-        if isinstance(v, Role):
-            return v.value  # Returns 'user' or 'admin'
-        return v
+class Auction(Base):
+    __tablename__ = "auctions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    winner_id = Column(Integer, nullable=True)
+    title = Column(String(255), index=True, nullable=True)
+    content = Column(Text, nullable=True)
+    author = Column(String(100), nullable=True)
+    start_price = Column(Float)
+    current_price = Column(Float)
+    is_active = Column(Boolean)
+    image_path = Column(String(500), nullable=True)
+    image_paths = Column(Text, nullable=True)
+    ends_at = Column(DateTime)
+    create_at = Column(DateTime, default=datetime.utcnow)
+    update_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class Bid(Base):
+    __tablename__ = "bids"
     
-        
-class UserLogin(BaseModel):
-    username: str
-    password: str
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-    user: UserResponse
-
-class TokenData(BaseModel):
-    username: Optional[str] = None
-    role: Optional[str] = None
-    user_id: Optional[int] = None 
+    id = Column(Integer, index=True, primary_key=True)
+    auction_id = Column(Integer, index=True)
+    bidder_id = Column(Integer)
+    amount = Column(Float)
+    bid_time = Column(DateTime)
     
-class RegisterRequest(BaseModel):
-    username: str
-    email: str
-    password: str
-
-class LoginRequest(BaseModel):
-    username: str
-    password: str

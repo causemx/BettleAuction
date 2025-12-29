@@ -1,32 +1,118 @@
-import enum
-from sqlalchemy import Column, Integer, String, Text, DateTime, Enum
+from pydantic import BaseModel, EmailStr, field_validator
 from datetime import datetime
-from database import Base
+from typing import Optional
+from schemas import Role
 
 
-class Role(str, enum.Enum):
-    USER = 'user'
-    ADMIN = 'admin'
+# ============================================================================
+# Bid Related
+# ============================================================================
+class BidCreate(BaseModel):
+    bidder_id: int
+    amount: float
+
+class BidResponse(BaseModel):
+    id: int
+    auction_id: int
+    bidder_id: int
+    amount: float
+    bid_time: datetime
     
-class UserModel(Base):
-    __tablename__ = "users"
+    class Config:
+        from_attributes = True
+
+
+# ============================================================================
+# Auction Related
+# ============================================================================
+
+class AuctionCreate(BaseModel):
+    title: str
+    content: str
+    author: str
+    start_price: float
+    ends_at: datetime
+    image_path: Optional[str] = None
+    image_paths: Optional[str] = None
+    current_price: Optional[float] = None
+    is_active: Optional[bool] = True
+    winner_id: Optional[int] = None
+
+class AuctionUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+    author: Optional[str] = None
+    start_price: Optional[float] = None
+    ends_at: Optional[float] = None
+    image_path: Optional[str] = None
+    image_paths: Optional[str] = None
     
-    id = Column(Integer, primary_key=True, index=True)
-    username = Column(String(100), unique=True, index=True)
-    email = Column(String, unique=True, index=True)
-    hashed_password = Column(String)
-    role = Column(Enum(Role), default=Role.USER)
-    create_at = Column(DateTime, default=datetime.utcnow)
-    update_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+class AuctionResponse(BaseModel):
+    title: str
+    content: str
+    author: str
+    start_price: float
+    current_price: float
+    is_active: bool
+    winner_id: Optional[int]
+    image_path: Optional[str] = None
+    image_paths: Optional[str] = None
+    ends_at: datetime
+    create_at: datetime
+    update_at: datetime
+    
+    class config:
+        from_attributes = True
 
-class Auction(Base):
-    __tablename__ = "auctions"
+# ============================================================================
+# Authenticate Related
+# ============================================================================
 
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String(255), index=True, nullable=True)
-    content = Column(Text, nullable=True)
-    author = Column(String(100), nullable=True)
-    image_path = Column(String(500), nullable=True)
-    image_paths = Column(Text, nullable=True)
-    create_at = Column(DateTime, default=datetime.utcnow)
-    update_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+class UserCreate(BaseModel):
+    username: str
+    email: EmailStr
+    password: str
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    email: EmailStr
+    role: str
+    create_at: datetime
+    
+    # pydantic V2 formation
+    model_config = {
+        'from_attributes': True
+    }
+
+    @field_validator('role')
+    @classmethod
+    def serialize_role(cls, v):
+        """Convert Role enum to string"""
+        if isinstance(v, Role):
+            return v.value  # Returns 'user' or 'admin'
+        return v
+    
+        
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+    user: UserResponse
+
+class TokenData(BaseModel):
+    username: Optional[str] = None
+    role: Optional[str] = None
+    user_id: Optional[int] = None 
+    
+class RegisterRequest(BaseModel):
+    username: str
+    email: str
+    password: str
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
