@@ -1,7 +1,7 @@
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from auth import hash_password, verify_password
-from schemas import Auction, Role, UserModel
+from schemas import Auction, Role, UserModel, Bid
 from models import AuctionCreate, AuctionUpdate
 
 def get_all_auctions(db: Session, skip: int = 0, limit: int = 10) -> List[Auction]:
@@ -48,6 +48,43 @@ def delete_auction(db: Session, auction_id: int) -> Optional[Auction]:
         db.commit()
     return db_auction
 
+
+# ============================================================================
+# BID CRUD OPERATIONS
+# ============================================================================
+
+def create_bid(db: Session, auction_id: int, bidder_id: int, amount: float) -> Optional['Bid']:
+    from datetime import datetime
+    
+    auction = get_auction_by_id(db, auction_id)
+    if not auction:
+        return None
+    db_bid = Bid(
+        auction_id=auction_id, 
+        bidder_id=bidder_id, 
+        amount=amount, 
+        bid_time=datetime.utcnow()
+    )
+    db.add(db_bid)
+    db.commit()
+    db.refresh(db_bid)
+    
+    auction.current_price = amount
+    auction.winner_id = bidder_id
+    db.commit()
+    db.refresh(auction)
+    
+    return db_bid
+
+def get_auction_bids(db: Session, auction_id: int) -> List['Bid']:
+    return db.query(Bid).filter(Bid.auction_id == auction_id).order_by(Bid.bid_time.desc()).all()
+
+
+def get_highest_bid(db: Session, auction_id: int) -> Optional['Bid']:
+    """Get the highest bid for an auction"""
+    return db.query(Bid).filter(Bid.auction_id == auction_id).order_by(Bid.amount.desc()).first()
+
+
 # ============================================================================
 # USER CRUD OPERATIONS
 # ============================================================================
@@ -89,6 +126,12 @@ def create_user(db: Session, username: str, email: str, password: str) -> UserMo
     db.refresh(db_user)
     
     return db_user
+
+def get_user_role(db: Session, user_id: int) -> Optional[Role]:
+    user = get_user_by_id(db, user_id)
+    if not user:
+        return None
+    return user.role
 
 def update_user_role(db: Session, user_id: int, new_role: str) -> Optional[UserModel]:
     if new_role not in ["user", "admin"]:

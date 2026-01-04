@@ -5,13 +5,13 @@ Fixed: All TemplateResponse calls include 'request' in context
 
 import crud
 import os
-from fastapi import APIRouter, Request, Depends, HTTPException, status
+from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from datetime import timedelta
 from auth import create_access_token
-from models import RegisterRequest, LoginRequest, AuctionCreate, AuctionUpdate
+from models import RegisterRequest, LoginRequest
 from database import get_db
 
 # Setup templates
@@ -187,6 +187,7 @@ async def login_user(
             max_age=1800,
             samesite="Lax"
         )
+    
         response.set_cookie(
             key="username",
             value=db_user.username,

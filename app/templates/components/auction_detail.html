@@ -1,4 +1,4 @@
-<!-- Auction Detail View Component with Fixed Image Carousel -->
+<!-- Auction Detail View Component - Complete with Bidding System -->
 <div class="bg-white rounded-lg border border-slate-200 shadow-lg p-6">
     <!-- Header with Back Button -->
     <div class="flex justify-between items-start mb-6">
@@ -116,8 +116,169 @@
     </div>
 
     <!-- Auction Content -->
-    <div class="prose prose-slate max-w-none">
+    <div class="prose prose-slate max-w-none mb-8">
         <div class="text-slate-700 leading-relaxed whitespace-pre-wrap">{{ auction.content }}</div>
+    </div>
+
+    <!-- ========================================================================
+         BIDDING SECTION - 3 COLUMN LAYOUT
+         ======================================================================== -->
+    <div class="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- LEFT COLUMN: Auction Status & Price Information -->
+        <div class="lg:col-span-1">
+            <div class="bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg border border-slate-200 p-6 sticky top-20">
+                
+                <!-- Auction Status Badge -->
+                <div class="mb-6">
+                    {% if auction.is_active %}
+                        <span class="inline-block px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">
+                            🟢 Active Auction
+                        </span>
+                    {% else %}
+                        <span class="inline-block px-3 py-1 bg-red-100 text-red-700 text-xs font-semibold rounded-full">
+                            🔴 Auction Ended
+                        </span>
+                    {% endif %}
+                </div>
+
+                <!-- Price Information Section -->
+                <div class="space-y-4 mb-6 pb-6 border-b border-slate-200">
+                    <!-- Starting Price -->
+                    <div>
+                        <p class="text-xs text-slate-600 font-medium uppercase tracking-wide">Starting Price</p>
+                        <p class="text-2xl font-bold text-slate-900">${{ "%.2f"|format(auction.start_price) }}</p>
+                    </div>
+
+                    <!-- Current Price (Highest Bid) -->
+                    <div>
+                        <p class="text-xs text-slate-600 font-medium uppercase tracking-wide">Current Bid</p>
+                        <p class="text-3xl font-bold text-blue-600">${{ "%.2f"|format(auction.current_price) }}</p>
+                        {% if auction.current_price > auction.start_price %}
+                        <p class="text-xs text-green-600 font-medium mt-1">
+                            ↑ +${{ "%.2f"|format(auction.current_price - auction.start_price) }}
+                        </p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Minimum Next Bid -->
+                    <div>
+                        <p class="text-xs text-slate-600 font-medium uppercase tracking-wide">Minimum Next Bid</p>
+                        <p class="text-xl font-bold text-slate-900">${{ "%.2f"|format(auction.current_price + 1.00) }}</p>
+                    </div>
+                </div>
+
+                <!-- Time Remaining / Countdown -->
+                <div class="mb-6">
+                    <p class="text-xs text-slate-600 font-medium uppercase tracking-wide mb-2">Time Remaining</p>
+                    <div class="bg-white rounded-lg p-3 border border-slate-200">
+                        <p id="countdown" class="text-sm font-mono text-slate-900">Calculating...</p>
+                        <p class="text-xs text-slate-500 mt-1">Ends: {{ auction.ends_at.strftime('%B %d, %Y at %I:%M %p') }}</p>
+                    </div>
+                </div>
+
+                <!-- Winner Info (if auction ended) -->
+                {% if not auction.is_active and auction.winner_id %}
+                <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <p class="text-xs text-yellow-700 font-medium mb-2">🏆 Auction Winner</p>
+                    <p class="text-sm font-semibold text-yellow-900" id="winner-name">Loading winner info...</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- RIGHT COLUMN: Bidding Form & History (2 cols) -->
+        <div class="lg:col-span-2 space-y-6">
+            
+            <!-- Bidding Form Section -->
+            {% if auction.is_active %}
+            <div class="bg-white rounded-lg border border-slate-200 shadow-md p-6">
+                <h3 class="text-lg font-semibold text-slate-900 mb-4">Place Your Bid</h3>
+                
+                {% if username %}
+                <!-- Bid Form (logged in users) -->
+                <form id="bid-form" onsubmit="return submitBid(event)">
+                    <!-- Bid Amount Input -->
+                    <div class="mb-4">
+                        <label for="bid-amount" class="block text-sm font-medium text-slate-900 mb-2">
+                            Bid Amount <span class="text-red-500">*</span>
+                        </label>
+                        <div class="relative">
+                            <span class="absolute left-3 top-3 text-slate-600 font-semibold">$</span>
+                            <input
+                                type="number"
+                                id="bid-amount"
+                                name="bid-amount"
+                                step="0.01"
+                                min="{{ "%.2f"|format(auction.current_price + 1.00) }}"
+                                placeholder="{{ "%.2f"|format(auction.current_price + 1.00) }}"
+                                value=""
+                                class="w-full pl-8 pr-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition bg-slate-50 placeholder-slate-400"
+                                required
+                            />
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1">
+                            Minimum: ${{ "%.2f"|format(auction.current_price + 1.00) }}
+                        </p>
+                    </div>
+
+                    <!-- Error Messages -->
+                    <div id="bid-error" class="hidden mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <p id="error-message" class="text-sm text-red-700 font-medium"></p>
+                    </div>
+
+                    <!-- Success Messages -->
+                    <div id="bid-success" class="hidden mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <p id="success-message" class="text-sm text-green-700 font-medium"></p>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <button
+                        type="submit"
+                        id="bid-submit-btn"
+                        class="w-full px-4 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition active:scale-95 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    >
+                        <span id="btn-text">Place Bid</span>
+                        <span id="btn-spinner" class="hidden ml-2 inline-block animate-spin">⏳</span>
+                    </button>
+                </form>
+                {% else %}
+                <!-- Login Prompt (not logged in) -->
+                <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg text-center">
+                    <p class="text-sm text-blue-700 font-medium mb-2">You must be logged in to bid</p>
+                    <a href="/login" class="text-blue-600 hover:text-blue-800 font-semibold">Login to Bid →</a>
+                </div>
+                {% endif %}
+            </div>
+            {% else %}
+            <!-- Auction Ended Message -->
+            <div class="bg-gradient-to-r from-red-50 to-orange-50 rounded-lg border border-red-200 shadow-md p-6 text-center">
+                <p class="text-lg font-semibold text-red-700 mb-2">🔴 Auction Has Ended</p>
+                <p class="text-sm text-red-600">
+                    This auction ended on {{ auction.ends_at.strftime('%B %d, %Y at %I:%M %p') }}
+                </p>
+                {% if auction.winner_id %}
+                <p class="text-sm text-red-600 mt-2">
+                    Winner: <span id="ended-winner-name" class="font-semibold">Loading...</span>
+                </p>
+                {% else %}
+                <p class="text-sm text-orange-600 mt-2">No bids were placed for this auction.</p>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <!-- Bid History Section -->
+            <div class="bg-white rounded-lg border border-slate-200 shadow-md p-6">
+                <h3 class="text-lg font-semibold text-slate-900 mb-4">Bid History</h3>
+                
+                <div id="bid-history-container" class="space-y-3 max-h-96 overflow-y-auto">
+                    <!-- Bids will be loaded here via JavaScript -->
+                    <div class="text-center py-8">
+                        <p class="text-slate-500">Loading bid history...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Footer Actions -->
@@ -137,7 +298,7 @@
 
 <script>
     // ========================================================================
-    // CAROUSEL MANAGEMENT - FIXED FOR MULTIPLE IMAGES
+    // CAROUSEL MANAGEMENT - MULTIPLE IMAGES SUPPORT
     // ========================================================================
     
     let carouselImages = [];
@@ -269,7 +430,7 @@
         updateCarousel(currentImageIndex + 1);
     }
 
-    // Initialize on page load
+    // Initialize carousel on page load
     document.addEventListener('DOMContentLoaded', function() {
         console.log('[CAROUSEL] Initializing carousel');
         initializeCarousel();
@@ -280,6 +441,253 @@
         console.log('[CAROUSEL] DOM already loaded, initializing now');
         initializeCarousel();
     }
+
+    // ========================================================================
+    // BIDDING SYSTEM - AUCTION DETAIL PAGE
+    // ========================================================================
+    
+    const auctionId = {{ auction.id }};
+    const username = '{{ username }}' || null;
+    const userId = {{ user_id or 'null' }};
+    const auctionEndsAt = new Date('{{ auction.ends_at.isoformat() }}');
+    
+    // ========================================================================
+    // COUNTDOWN TIMER
+    // ========================================================================
+    
+    function updateCountdown() {
+        const countdownEl = document.getElementById('countdown');
+        const now = new Date();
+        const diff = auctionEndsAt - now;
+        
+        if (diff <= 0) {
+            countdownEl.textContent = '⏰ Auction Ended';
+            countdownEl.parentElement.classList.add('bg-red-50', 'border-red-200');
+            // Disable bid form if showing
+            const bidForm = document.getElementById('bid-form');
+            if (bidForm) {
+                bidForm.style.display = 'none';
+            }
+            return;
+        }
+        
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+        const minutes = Math.floor((diff / 1000 / 60) % 60);
+        const seconds = Math.floor((diff / 1000) % 60);
+        
+        countdownEl.textContent = `${days}d ${hours}h ${minutes}m ${seconds}s`;
+    }
+    
+    // Update countdown every second
+    updateCountdown();
+    setInterval(updateCountdown, 1000);
+    
+    // ========================================================================
+    // LOAD BID HISTORY
+    // ========================================================================
+    
+    async function loadBidHistory() {
+        try {
+            const response = await fetch(`/api/auctions/${auctionId}/bids`);
+            
+            if (!response.ok) {
+                console.error('Failed to load bids:', response.status);
+                return;
+            }
+            
+            const bids = await response.json();
+            console.log('[BIDS] Loaded:', bids);
+            
+            const container = document.getElementById('bid-history-container');
+            container.innerHTML = ''; // Clear loading message
+            
+            if (bids.length === 0) {
+                container.innerHTML = '<p class="text-center text-slate-500 py-8">No bids yet. Be the first to bid!</p>';
+                return;
+            }
+            
+            // Sort bids by amount (highest first)
+            bids.sort((a, b) => b.amount - a.amount);
+            
+            bids.forEach((bid, index) => {
+                const bidEl = document.createElement('div');
+                bidEl.className = `flex items-center justify-between p-3 rounded-lg ${
+                    index === 0 ? 'bg-blue-50 border-2 border-blue-200' : 'bg-slate-50 border border-slate-200'
+                }`;
+                
+                bidEl.innerHTML = `
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2">
+                            ${index === 0 ? '🏆' : ''}
+                            <p class="font-semibold text-slate-900">$${bid.amount.toFixed(2)}</p>
+                            ${index === 0 ? '<span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded font-semibold">Highest</span>' : ''}
+                        </div>
+                        <p class="text-xs text-slate-600 mt-1">User #${bid.bidder_id}</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xs text-slate-500">${new Date(bid.bid_time).toLocaleString()}</p>
+                    </div>
+                `;
+                
+                container.appendChild(bidEl);
+            });
+            
+        } catch (error) {
+            console.error('[BIDS] Error loading:', error);
+            const container = document.getElementById('bid-history-container');
+            container.innerHTML = '<p class="text-center text-red-500 py-8">Failed to load bid history</p>';
+        }
+    }
+    
+    // Load bid history on page load
+    document.addEventListener('DOMContentLoaded', () => {
+        loadBidHistory();
+    });
+    
+    // ========================================================================
+    // SUBMIT BID
+    // ========================================================================
+    
+    async function submitBid(event) {
+        event.preventDefault();
+        
+        if (!username) {
+            window.location.href = '/login';
+            return false;
+        }
+        
+        const bidAmountInput = document.getElementById('bid-amount');
+        const bidAmount = parseFloat(bidAmountInput.value);
+        const minBid = parseFloat(bidAmountInput.min);
+        
+        // Client-side validation
+        if (isNaN(bidAmount) || bidAmount < minBid) {
+            showBidError(`Bid must be at least $${minBid.toFixed(2)}`);
+            return false;
+        }
+        
+        // Disable form
+        const submitBtn = document.getElementById('bid-submit-btn');
+        const btnText = document.getElementById('btn-text');
+        const btnSpinner = document.getElementById('btn-spinner');
+        
+        submitBtn.disabled = true;
+        btnText.classList.add('hidden');
+        btnSpinner.classList.remove('hidden');
+        
+        try {
+            // Submit bid to backend
+            const response = await fetch(`/api/auctions/${auctionId}/bid`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    amount: bidAmount
+                }),
+                credentials: 'same-origin'
+            });
+            
+            const result = await response.json();
+            console.log('[BID] Response:', result);
+            
+            if (response.ok) {
+                // Success
+                showBidSuccess(`Your bid of $${bidAmount.toFixed(2)} has been placed!`);
+                bidAmountInput.value = '';
+                
+                // Reload bid history
+                setTimeout(() => {
+                    loadBidHistory();
+                    updateMinimumBid(bidAmount);
+                }, 500);
+            } else {
+                // Error from backend
+                showBidError(result.detail || 'Failed to place bid');
+            }
+            
+        } catch (error) {
+            console.error('[BID] Error:', error);
+            showBidError('Network error: ' + error.message);
+        } finally {
+            submitBtn.disabled = false;
+            btnText.classList.remove('hidden');
+            btnSpinner.classList.add('hidden');
+        }
+        
+        return false;
+    }
+    
+    // ========================================================================
+    // HELPER FUNCTIONS
+    // ========================================================================
+    
+    function updateMinimumBid(currentBid) {
+        const bidAmountInput = document.getElementById('bid-amount');
+        const newMinimum = currentBid + 1.00;
+        bidAmountInput.min = newMinimum.toFixed(2);
+        bidAmountInput.placeholder = newMinimum.toFixed(2);
+    }
+    
+    function showBidError(message) {
+        const errorEl = document.getElementById('bid-error');
+        const errorMsg = document.getElementById('error-message');
+        errorMsg.textContent = message;
+        errorEl.classList.remove('hidden');
+        
+        // Hide success if showing
+        document.getElementById('bid-success').classList.add('hidden');
+        
+        // Auto hide after 5 seconds
+        setTimeout(() => {
+            errorEl.classList.add('hidden');
+        }, 5000);
+    }
+    
+    function showBidSuccess(message) {
+        const successEl = document.getElementById('bid-success');
+        const successMsg = document.getElementById('success-message');
+        successMsg.textContent = message;
+        successEl.classList.remove('hidden');
+        
+        // Hide error if showing
+        document.getElementById('bid-error').classList.add('hidden');
+        
+        // Auto hide after 5 seconds
+        setTimeout(() => {
+            successEl.classList.add('hidden');
+        }, 5000);
+    }
+    
+    // ========================================================================
+    // LOAD WINNER INFO (if auction ended)
+    // ========================================================================
+    
+    async function loadWinnerInfo() {
+        const winnerEl = document.getElementById('winner-name');
+        const endedWinnerEl = document.getElementById('ended-winner-name');
+        
+        if (!winnerEl && !endedWinnerEl) return;
+        
+        try {
+            const response = await fetch(`/api/auctions/${auctionId}/winner`);
+            if (response.ok) {
+                const data = await response.json();
+                if (data.winner_name) {
+                    if (winnerEl) winnerEl.textContent = data.winner_name;
+                    if (endedWinnerEl) endedWinnerEl.textContent = data.winner_name;
+                }
+            }
+        } catch (error) {
+            console.error('Failed to load winner info:', error);
+        }
+    }
+    
+    // Load winner info if auction ended
+    {% if not auction.is_active %}
+    document.addEventListener('DOMContentLoaded', loadWinnerInfo);
+    {% endif %}
 </script>
 
 <style>
@@ -299,6 +707,36 @@
         word-wrap: break-word;
     }
 
+    /* Countdown timer animation */
+    #countdown {
+        font-size: 0.875rem;
+        letter-spacing: 0.05em;
+    }
+    
+    /* Bid history scrolling */
+    #bid-history-container {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(71, 85, 105, 0.5) rgba(226, 232, 240, 1);
+    }
+    
+    #bid-history-container::-webkit-scrollbar {
+        width: 6px;
+    }
+    
+    #bid-history-container::-webkit-scrollbar-track {
+        background: #f1f5f9;
+        border-radius: 10px;
+    }
+    
+    #bid-history-container::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 10px;
+    }
+    
+    #bid-history-container::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+    }
+
     /* Carousel responsive sizing */
     @media (max-width: 768px) {
         #carousel-image {
@@ -310,5 +748,34 @@
         #carousel-image {
             max-height: 300px;
         }
+    }
+
+    /* Sticky sidebar */
+    @media (min-width: 1024px) {
+        .sticky {
+            position: sticky;
+        }
+    }
+
+    /* Animations */
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+        to {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+
+    @keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    .animate-spin {
+        animation: spin 1s linear infinite;
     }
 </style>

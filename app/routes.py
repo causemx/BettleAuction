@@ -4,10 +4,10 @@ import uuid
 from datetime import datetime
 from fastapi.templating import Jinja2Templates
 from fastapi import APIRouter, Request, Depends, UploadFile, File, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 from database import get_db
-from models import AuctionCreate, AuctionUpdate, AuctionResponse
+from models import AuctionCreate, AuctionUpdate 
 
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -70,8 +70,9 @@ async def get_create_form(request: Request):
     username = request.cookies.get("username")
     if not username:
         return HTMLResponse(status_code=401)
-    
+     
     print(f"[DEBUG CREATE-FORM] Loading create form for user: {username}")
+
     
     return templates.TemplateResponse(
         "components/auction_form.html",
@@ -87,7 +88,15 @@ async def create_auction(
     request: Request,
     db: Session = Depends(get_db)
 ):
-    """Create new auction (form submission via HTMX)"""
+    """
+    [Admin] Create new auction (from submission via HTMX)
+    
+    :param request: HTTP request
+    :type request: Request
+    :param db: Database
+    :type db: Session
+    """
+    
     username = request.cookies.get("username")
     print(f"[DEBUG CREATE] Starting create_auction for user: {username}")
     
@@ -97,7 +106,12 @@ async def create_auction(
     
     user = crud.get_user_by_name(db, username=username)
     print(f"[DEBUG CREATE] User found: {user is not None}")
-    
+    if user.role != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Only administrators can create auctions"
+        )
+     
     if not user:
         print("[DEBUG CREATE] User not found in DB")
         return HTMLResponse(status_code=404)
