@@ -12,12 +12,14 @@
                     <h1 class="text-3xl font-serif text-slate-900">Auctions</h1>
                     <p class="text-sm text-slate-500 mt-1">Manage your auctions effortlessly</p>
                 </div>
-                <button
-                    onclick="openCreateModal()"
-                    class="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition font-medium"
-                >
-                    + New Auction
-                </button>
+                
+                <!-- ========================================================================
+                     ADMIN-ONLY: "+NEW AUCTION" BUTTON
+                     Updated: Shows only for admin users
+                     ======================================================================== -->
+                <div id="create-auction-btn-container">
+                    <!-- Button will be shown/hidden by JavaScript based on role -->
+                </div>
             </div>
         </div>
     </div>
@@ -60,13 +62,70 @@
     let isSubmitting = false;
     
     // ========================================================================
-    // PAGE INITIALIZATION
+    // PAGE INITIALIZATION WITH ROLE CHECK
     // ========================================================================
     
     document.addEventListener('DOMContentLoaded', () => {
-        console.log('[INIT] Page loaded, loading auctions');
+        console.log('[INIT] Page loaded');
+        initializeCreateButton();  // ← CHECK ROLE AND SHOW/HIDE BUTTON
         loadAuctions();
     });
+
+    // ========================================================================
+    // INITIALIZE CREATE BUTTON - SHOW ONLY FOR ADMINS
+    // ========================================================================
+    
+    function initializeCreateButton() {
+        const container = document.getElementById('create-auction-btn-container');
+        const role = getCookie('role');
+        const username = getCookie('username');
+        
+        console.log('[INIT] User:', username, 'Role:', role);
+        
+        // Not logged in
+        if (!username) {
+            console.log('[INIT] Not logged in');
+            container.innerHTML = '';
+            return;
+        }
+        
+        // Not admin
+        if (role !== 'admin') {
+            console.log('[INIT] User is not admin, hiding create button');
+            container.innerHTML = '';  // Hide button for regular users
+            return;
+        }
+        
+        // Is admin - show button
+        console.log('[INIT] User is admin, showing create button');
+        container.innerHTML = `
+            <button
+                onclick="openCreateModal()"
+                class="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition font-medium flex items-center gap-2"
+            >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+                New Auction
+            </button>
+        `;
+    }
+
+    // ========================================================================
+    // HELPER: GET COOKIE VALUE
+    // ========================================================================
+    
+    function getCookie(name) {
+        const nameEQ = name + "=";
+        const cookies = document.cookie.split(';');
+        for (let cookie of cookies) {
+            cookie = cookie.trim();
+            if (cookie.indexOf(nameEQ) === 0) {
+                return cookie.substring(nameEQ.length);
+            }
+        }
+        return null;
+    }
 
     // ========================================================================
     // LOAD AUCTIONS LIST
@@ -97,6 +156,13 @@
     // ========================================================================
     
     function openCreateModal() {
+        // ← SECURITY CHECK: Verify role before showing form
+        const role = getCookie('role');
+        if (role !== 'admin') {
+            alert('Only admins can create auctions');
+            return;
+        }
+        
         console.log('[OPEN_CREATE] Opening create modal');
         document.getElementById('modal-title').textContent = 'Create New Auction';
         document.getElementById('auction-modal').classList.remove('hidden');

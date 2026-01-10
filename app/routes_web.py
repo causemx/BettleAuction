@@ -1,6 +1,7 @@
-# app/routes_web.py - FULLY FIXED (with request context)
+# app/routes_web.py - UPDATED
 """
-Fixed: All TemplateResponse calls include 'request' in context
+Updated: Login route now sets role cookie and returns role in response
+Admin-only button functionality depends on this file
 """
 
 import crud
@@ -14,7 +15,6 @@ from auth import create_access_token
 from models import RegisterRequest, LoginRequest
 from database import get_db
 
-# Setup templates
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEMPLATES_DIR = os.path.join(BASE_DIR, "app", "templates")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
@@ -137,7 +137,7 @@ async def login_user(
     data: LoginRequest,
     db: Session = Depends(get_db)
 ):
-    """Login via JSON POST"""
+    """Login via JSON POST - UPDATED with role support"""
     try:
         username = data.username.strip()
         password = data.password
@@ -166,7 +166,7 @@ async def login_user(
         access_token = create_access_token(
             data={
                 "sub": db_user.username,
-                "role": db_user.role.value,
+                "role": db_user.role.value,  # ← INCLUDE ROLE
                 "user_id": db_user.id
             },
             expires_delta=access_token_expires
@@ -175,7 +175,9 @@ async def login_user(
         response = JSONResponse(
             {
                 "message": "Login successful",
-                "redirect": "/auctions"
+                "redirect": "/auctions",
+                "role": db_user.role.value,  # ← RETURN ROLE
+                "username": db_user.username
             },
             status_code=200
         )
@@ -196,7 +198,16 @@ async def login_user(
             samesite="Lax"
         )
         
-        print(f"[LOGIN] Success: {db_user.username}")
+        # ← NEW: Set role cookie for frontend
+        response.set_cookie(
+            key="role",
+            value=db_user.role.value,
+            httponly=False,  # Not HTTPOnly so JS can read it
+            max_age=1800,
+            samesite="Lax"
+        )
+        
+        print(f"[LOGIN] Success: {db_user.username} (role: {db_user.role.value})")
         return response
 
     except Exception as e:
@@ -212,6 +223,7 @@ async def logout():
     response = RedirectResponse(url="/login", status_code=302)
     response.delete_cookie("access_token")
     response.delete_cookie("username")
+    response.delete_cookie("role")  # ← DELETE ROLE COOKIE
     return response
 
 # ============================================================================

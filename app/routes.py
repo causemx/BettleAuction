@@ -1,3 +1,9 @@
+# app/routes.py - UPDATED
+"""
+Updated: create_auction now checks admin role before creating
+This ensures only admins can create auctions
+"""
+
 import os
 import crud
 import uuid
@@ -66,7 +72,7 @@ async def get_auctions_list(
 
 @router_auction.get("/api/auctions/create-form", response_class=HTMLResponse)
 async def get_create_form(request: Request):
-    """Get create form for auction - FIXED: includes request in context"""
+    """Get create form for auction"""
     username = request.cookies.get("username")
     if not username:
         return HTMLResponse(status_code=401)
@@ -89,12 +95,9 @@ async def create_auction(
     db: Session = Depends(get_db)
 ):
     """
-    [Admin] Create new auction (from submission via HTMX)
+    [Admin Only] Create new auction (from submission via HTMX)
     
-    :param request: HTTP request
-    :type request: Request
-    :param db: Database
-    :type db: Session
+    Updated: Now checks admin role before creating
     """
     
     username = request.cookies.get("username")
@@ -104,18 +107,24 @@ async def create_auction(
         print("[DEBUG CREATE] No username - returning 401")
         return HTMLResponse(status_code=401)
     
+    # ========================================================================
+    # GET USER AND CHECK ROLE ← IMPORTANT
+    # ========================================================================
     user = crud.get_user_by_name(db, username=username)
-    print(f"[DEBUG CREATE] User found: {user is not None}")
-    if user.role != "admin":
-        raise HTTPException(
-            status_code=403,
-            detail="Only administrators can create auctions"
-        )
-     
+    
     if not user:
         print("[DEBUG CREATE] User not found in DB")
         return HTMLResponse(status_code=404)
     
+    # ← CHECK IF ADMIN (use .value to get enum string)
+    if user.role.value != "admin":
+        print(f"[DEBUG CREATE] Unauthorized: {username} is not admin (role: {user.role.value})")
+        return HTMLResponse(
+            status_code=403,
+            content="<p class='text-red-600 font-semibold'>Only administrators can create auctions</p>"
+        )
+    
+    # User is admin, continue with creation...
     try:
         form_data = await request.form()
         print(f"[DEBUG CREATE] Form keys: {list(form_data.keys())}")
@@ -130,7 +139,7 @@ async def create_auction(
         try:
             start_price = float(start_price_str)
             if start_price < 0:
-                raise ValueError("Start price must positive")
+                raise ValueError("Start price must be positive")
             ends_at = datetime.fromisoformat(ends_at_str)
             if ends_at <= datetime.utcnow():
                 raise ValueError("End time must be in future")
@@ -142,7 +151,7 @@ async def create_auction(
             return templates.TemplateResponse(
                 "components/auction_form.html",
                 {
-                    "request": request,  # ← ALWAYS include request
+                    "request": request,
                     "error": "Title and content are required",
                     "mode": "create"
                 }
@@ -160,11 +169,11 @@ async def create_auction(
         
         print("[DEBUG CREATE] Creating auction in DB")
         new_auction = crud.create_auction(db, auction)
-        print(f"[DEBUG CREATE] ✓ SUCCESS - id={new_auction.id}, title={new_auction.title}")
+        print(f"[DEBUG CREATE] ✓ SUCCESS - id={new_auction.id}, title={new_auction.title}, by admin {username}")
         
         return templates.TemplateResponse(
             "components/auction_item.html",
-            {"request": request, "auction": new_auction}  # ← Include request
+            {"request": request, "auction": new_auction}
         )
     
     except Exception as e:
@@ -174,7 +183,7 @@ async def create_auction(
         return templates.TemplateResponse(
             "components/auction_form.html",
             {
-                "request": request,  # ← Include request
+                "request": request,
                 "error": str(e),
                 "mode": "create"
             }
@@ -187,7 +196,7 @@ async def edit_auction_form(
     auction_id: int,
     db: Session = Depends(get_db)
 ):
-    """Get edit form for auction - FIXED: includes request in context"""
+    """Get edit form for auction"""
     username = request.cookies.get("username")
     if not username:
         return HTMLResponse(status_code=401)
@@ -231,7 +240,7 @@ async def update_auction(
             return templates.TemplateResponse(
                 "components/auction_form.html",
                 {
-                    "request": request,  # ← Include request
+                    "request": request,
                     "auction": auction,
                     "error": "Title and content are required",
                     "mode": "edit",
@@ -253,7 +262,7 @@ async def update_auction(
         
         return templates.TemplateResponse(
             "components/auction_item.html",
-            {"request": request, "auction": updated_auction}  # ← Include request
+            {"request": request, "auction": updated_auction}
         )
     
     except Exception as e:
@@ -262,7 +271,7 @@ async def update_auction(
         return templates.TemplateResponse(
             "components/auction_form.html",
             {
-                "request": request,  # ← Include request
+                "request": request,
                 "auction": auction,
                 "error": str(e),
                 "mode": "edit",
@@ -332,5 +341,5 @@ async def get_auction_detail(
     
     return templates.TemplateResponse(
         "components/auction_detail.html",
-        {"request": request, "auction": auction}  # ← Include request
+        {"request": request, "auction": auction}
     )
