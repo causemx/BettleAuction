@@ -1,11 +1,9 @@
 import crud
 from datetime import datetime
-from fastapi import APIRouter, Request, Depends, HTTPException
+from fastapi import APIRouter, Request, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from typing import List, Optional
 from database import get_db
-from models import BidCreate, BidResponse
 
 
 router_bid = APIRouter(tags=["bidding"])
@@ -13,6 +11,7 @@ router_bid = APIRouter(tags=["bidding"])
 @router_bid.post("/api/auctions/{auction_id}/bid", response_model=dict)
 async def place_bid(request: Request, auction_id: int, db: Session=Depends(get_db)):
     username = request.cookies.get("username")
+    print(f"[BID] username: {username}")
     if not username:
         print("[BID] No username found")
         return JSONResponse(

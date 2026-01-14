@@ -341,5 +341,9 @@ async def get_auction_detail(
     
     return templates.TemplateResponse(
         "components/auction_detail.html",
-        {"request": request, "auction": auction}
+        {
+            "request": request, 
+            "auction": auction,
+            "username": username,
+        }
     )
